@@ -10,7 +10,7 @@ scoring:
   min_auc_for_registration: 0.75
   optuna_trials: 50
 
-uplift:
-  learner: t_learner  # или x_learner
-  treatment_col: treatment_flag
-  min_qini_for_registration: 0.05
+# uplift:
+#   learner: t_learner  # или x_learner
+#   treatment_col: treatment_flag
+#   min_qini_for_registration: 0.05

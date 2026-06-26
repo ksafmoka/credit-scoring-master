@@ -11,15 +11,15 @@ CREATE TABLE IF NOT EXISTS predictions.scoring_predictions (
     predicted_at    TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS predictions.uplift_predictions (
-    prediction_id       BIGSERIAL PRIMARY KEY,
-    client_id           BIGINT NOT NULL,
-    model_version       VARCHAR(100) NOT NULL,
-    uplift_score        NUMERIC(10, 8),
-    segment             VARCHAR(30),
-    recommended_action  VARCHAR(50),
-    predicted_at        TIMESTAMP DEFAULT NOW()
-);
+-- CREATE TABLE IF NOT EXISTS predictions.uplift_predictions (
+--     prediction_id       BIGSERIAL PRIMARY KEY,
+--     client_id           BIGINT NOT NULL,
+--     model_version       VARCHAR(100) NOT NULL,
+--     uplift_score        NUMERIC(10, 8),
+--     segment             VARCHAR(30),
+--     recommended_action  VARCHAR(50),
+--     predicted_at        TIMESTAMP DEFAULT NOW()
+-- );
 
 -- ─────────────────────────────────────────
 -- Monitoring tables

@@ -33,7 +33,7 @@ class MLflowConfig:
         "MLFLOW_TRACKING_URI", "http://localhost:5000"
     )
     EXPERIMENT_SCORING: str = "credit_scoring"
-    EXPERIMENT_UPLIFT: str = "uplift_modeling"
+    # EXPERIMENT_UPLIFT: str = "uplift_modeling"
 
 
 class TrainingConfig:
