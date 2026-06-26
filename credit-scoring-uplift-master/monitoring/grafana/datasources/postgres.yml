@@ -1,0 +1,15 @@
+# monitoring/grafana/datasources/postgres.yml
+
+apiVersion: 1
+datasources:
+  - name: PostgreSQL
+    type: postgres
+    url: postgres:5432
+    database: credit_scoring
+    user: ml_user
+    secureJsonData:
+      password: ml_password
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 5
+      maxIdleConns: 5

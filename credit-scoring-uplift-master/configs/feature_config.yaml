@@ -1,0 +1,26 @@
+# configs/feature_config.yaml
+
+version: "v1.0"
+
+payment_windows_days:
+  - 30
+  - 90
+  - 180
+
+target_encoding:
+  cols:
+    - home_ownership
+    - purpose
+  smoothing: 20
+  min_samples: 10
+  noise_level: 0.01
+
+numerical_clip:
+  dti_ratio:
+    min: 0
+    max: 100
+
+critical_features_no_null:
+  - loan_to_income
+  - credit_utilization
+  - income_log

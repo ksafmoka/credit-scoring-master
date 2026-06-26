@@ -1,0 +1,15 @@
+# configs/monitoring_config.yaml
+
+drift:
+  psi_threshold: 0.15
+  psi_warning: 0.10
+  reference_window_days: 90
+  current_window_days: 7
+
+performance:
+  auc_drop_alert: 0.03
+  min_predictions_for_check: 100
+
+alerts:
+  telegram: true
+  email: false
