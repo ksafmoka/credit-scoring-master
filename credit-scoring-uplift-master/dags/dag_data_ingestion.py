@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+import os
 
 default_args = {
     "owner": "ml-team",
@@ -27,11 +28,11 @@ def load_raw_data(**context):
     from src.config import get_db_engine
 
     engine = get_db_engine()
-    # путь к данным (скачать с Kaggle заранее)
-    load_lending_club_data(
-        filepath=r"C:\Users\pc\Downloads\credit-scoring-uplift-master\credit-scoring-uplift-master\data\lending_club_reject.csv",
-        engine=engine,
+    filepath = os.getenv(
+        "LENDING_CLUB_CSV_PATH",
+        "/opt/airflow/data/lending_club.csv",
     )
+    load_lending_club_data(filepath=filepath, engine=engine)
 
 
 def generate_payment_history(**context):

@@ -106,10 +106,45 @@ def decide_register(**context):
 
 def register_model(**context):
     import mlflow
+    from mlflow.tracking import MlflowClient
 
     mlflow.set_tracking_uri("http://mlflow:5000")
-    # регистрация лучшей модели
-    pass
+    client = MlflowClient()
+
+    experiment = client.get_experiment_by_name("credit_scoring")
+    if experiment is None:
+        return
+
+    # находим лучший run
+    runs = client.search_runs(
+        experiment_ids=[experiment.experiment_id],
+        order_by=["metrics.val_auc_roc DESC"],
+        max_results=1,
+    )
+
+    if not runs:
+        return
+
+    best_run = runs[0]
+    run_id = best_run.info.run_id
+    auc = best_run.data.metrics.get("val_auc_roc", 0)
+
+    if auc < 0.75:
+        return
+
+    model_uri = f"runs:/{run_id}/model"
+
+    # регистрация
+    result = mlflow.register_model(model_uri, "credit_scoring")
+
+    # переводим в Production
+    client.transition_model_version_stage(
+        name="credit_scoring",
+        version=result.version,
+        stage="Production",
+        archive_existing_versions=True,
+    )
+
 
 
 with dag:
