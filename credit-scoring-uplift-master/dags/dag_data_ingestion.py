@@ -16,7 +16,7 @@ dag = DAG(
     default_args=default_args,
     description="Load raw data into PostgreSQL",
     schedule_interval="@daily",
-    start_date=datetime(2024, 1, 1),
+    start_date=datetime(2026, 6, 26),
     catchup=False,
     tags=["ingestion", "raw"],
 )
@@ -29,7 +29,7 @@ def load_raw_data(**context):
     engine = get_db_engine()
     # путь к данным (скачать с Kaggle заранее)
     load_lending_club_data(
-        filepath="/opt/airflow/data/lending_club.csv",
+        filepath=r"C:\Users\pc\Downloads\credit-scoring-uplift-master\credit-scoring-uplift-master\data\lending_club_reject.csv",
         engine=engine,
     )
 
