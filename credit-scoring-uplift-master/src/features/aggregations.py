@@ -39,28 +39,11 @@ class AggregationFeatureComputer:
                 ON ph.application_id = a.application_id
         """
         if self.reference_date:
-            query += (
-                f" WHERE a.application_date <= '{self.reference_date}'"
-            )
+            query += f" WHERE a.application_date <= '{self.reference_date}'"
 
-        df = pd.read_sql(query, engine)
-        df["payment_date"] = pd.to_datetime(df["payment_date"])
-        df["application_date"] = pd.to_datetime(
-            df["application_date"]
-        )
-
-        results = []
-        for window in self.windows:
-            agg = self._compute_window_features(df, window)
-            results.append(agg)
-
-        # merge all windows
-        final = results[0]
-        for r in results[1:]:
-            final = final.merge(r, on="application_id", how="outer")
-
-        logger.info(f"Aggregation features computed: {final.shape}")
-        return final
+        # SQLAlchemy 2.x: connection
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn)
 
     def _compute_window_features(
         self,

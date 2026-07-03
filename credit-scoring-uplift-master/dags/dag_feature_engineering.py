@@ -90,15 +90,10 @@ def merge_and_validate(**context):
 
     engine = get_db_engine()
 
-    num = pd.read_sql(
-        "SELECT * FROM features.numerical_staging", engine
-    )
-    agg = pd.read_sql(
-        "SELECT * FROM features.aggregation_staging", engine
-    )
-    te = pd.read_sql(
-        "SELECT * FROM features.target_enc_staging", engine
-    )
+    with engine.connect() as conn:
+        num = pd.read_sql("SELECT * FROM features.numerical_staging", conn)
+        agg = pd.read_sql("SELECT * FROM features.aggregation_staging", conn)
+        te = pd.read_sql("SELECT * FROM features.target_enc_staging", conn)
 
     merged = num.merge(agg, on="application_id", how="left")
     merged = merged.merge(te, on="application_id", how="left")
@@ -116,13 +111,16 @@ def merge_and_validate(**context):
         raise ValueError(f"Validation failed: {report.errors}")
 
     merged["feature_version"] = FeatureConfig.VERSION
-    merged.to_sql(
-        "application_features",
-        engine,
-        schema="features",
-        if_exists="append",
-        index=False,
-    )
+
+    # SQLAlchemy 2.x: connection для записи
+    with engine.begin() as conn:
+        merged.to_sql(
+            "application_features",
+            conn,
+            schema="features",
+            if_exists="append",
+            index=False,
+        )
 
 
 with dag:

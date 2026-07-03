@@ -87,32 +87,31 @@ class RegularizedTargetEncoder:
         train_cutoff: str,
         execution_date: str,
     ) -> pd.DataFrame:
-        """
-        Fit на train, transform на всём датасете.
-        Запись результатов в features схему.
-        """
-        train_df = pd.read_sql(
-            f"""
-            SELECT a.{', a.'.join(self.cols)},
-                   a.is_default,
-                   a.application_id
-            FROM raw.applications a
-            WHERE a.application_date <= '{train_cutoff}'
-              AND a.is_default IS NOT NULL
-            """,
-            engine,
-        )
+
+        with engine.connect() as conn:
+            train_df = pd.read_sql(
+                f"""
+                SELECT a.{', a.'.join(self.cols)},
+                    a.is_default,
+                    a.application_id
+                FROM raw.applications a
+                WHERE a.application_date <= '{train_cutoff}'
+                AND a.is_default IS NOT NULL
+                """,
+                conn,
+            )
 
         self.fit(train_df)
 
-        all_df = pd.read_sql(
-            f"""
-            SELECT application_id,
-                   {', '.join(self.cols)}
-            FROM raw.applications
-            WHERE application_date <= '{execution_date}'
-            """,
-            engine,
-        )
+        with engine.connect() as conn:
+            all_df = pd.read_sql(
+                f"""
+                SELECT application_id,
+                    {', '.join(self.cols)}
+                FROM raw.applications
+                WHERE application_date <= '{execution_date}'
+                """,
+                conn,
+            )
 
         return self.transform(all_df)

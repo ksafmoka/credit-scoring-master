@@ -1,16 +1,14 @@
 # src/serving/schemas.py
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional
 
 
 class ScoringRequest(BaseModel):
     application_id: int
-    loan_amount: float = Field(gt=0, description="Loan amount in USD")
-    income: float = Field(gt=0, description="Annual income in USD")
-    loan_term: int = Field(
-        ge=12, le=84, description="Loan term in months"
-    )
+    loan_amount: float = Field(gt=0)
+    income: float = Field(gt=0)
+    loan_term: int = Field(ge=12, le=84)
     interest_rate: float = Field(ge=0, le=50)
     employment_years: float = Field(ge=0, le=50)
     credit_score: int = Field(ge=300, le=850)
@@ -26,9 +24,7 @@ class ScoringRequest(BaseModel):
     def validate_home_ownership(cls, v: str) -> str:
         allowed = {"RENT", "OWN", "MORTGAGE", "OTHER"}
         if v.upper() not in allowed:
-            raise ValueError(
-                f"home_ownership must be one of {allowed}"
-            )
+            raise ValueError(f"home_ownership must be one of {allowed}")
         return v.upper()
 
 
@@ -39,15 +35,12 @@ class ReasonCode(BaseModel):
 
 
 class ScoringResponse(BaseModel):
+    # Фикс Pydantic warning
+    model_config = ConfigDict(protected_namespaces=())
+
     application_id: int
-    pd_score: float = Field(
-        description="Raw probability of default"
-    )
-    pd_calibrated: float = Field(
-        description="Calibrated probability of default"
-    )
-    risk_bucket: str = Field(
-        description="LOW / MEDIUM / HIGH / VERY_HIGH"
-    )
+    pd_score: float
+    pd_calibrated: float
+    risk_bucket: str
     top_reasons: list[ReasonCode]
     model_version: str

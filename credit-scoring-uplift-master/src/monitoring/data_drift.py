@@ -49,26 +49,18 @@ def run_drift_check(
     check_date: str,
 ) -> list[dict]:
     """Полная проверка дрифта с записью в monitoring схему."""
+    with engine.connect() as conn:
+        ref_df = pd.read_sql(f"""
+            SELECT {', '.join(features)}
+            FROM features.application_features
+            WHERE feature_date BETWEEN '{reference_start}' AND '{reference_end}'
+        """, conn)
 
-    ref_df = pd.read_sql(
-        f"""
-        SELECT {', '.join(features)}
-        FROM features.application_features
-        WHERE feature_date BETWEEN '{reference_start}'
-              AND '{reference_end}'
-        """,
-        engine,
-    )
-
-    cur_df = pd.read_sql(
-        f"""
-        SELECT {', '.join(features)}
-        FROM features.application_features
-        WHERE feature_date BETWEEN '{current_start}'
-              AND '{current_end}'
-        """,
-        engine,
-    )
+        cur_df = pd.read_sql(f"""
+            SELECT {', '.join(features)}
+            FROM features.application_features
+            WHERE feature_date BETWEEN '{current_start}' AND '{current_end}'
+        """, conn)
 
     if len(ref_df) < 100 or len(cur_df) < 100:
         logger.warning(
@@ -121,13 +113,14 @@ def run_drift_check(
 
     # записываем результаты
     if results:
-        pd.DataFrame(results).to_sql(
-            "feature_drift",
-            engine,
-            schema="monitoring",
-            if_exists="append",
-            index=False,
-        )
+        with engine.begin() as conn:
+            pd.DataFrame(results).to_sql(
+                "feature_drift",
+                conn,
+                schema="monitoring",
+                if_exists="append",
+                index=False,
+            )
 
     return results
 

@@ -1,8 +1,5 @@
-# src/serving/predict.py
-
 import numpy as np
 import pandas as pd
-import shap
 import mlflow
 from loguru import logger
 
@@ -13,7 +10,6 @@ from src.config import MLflowConfig, FeatureConfig
 
 
 class Predictor:
-    """Загрузка модели и инференс."""
 
     def __init__(self):
         self.model = None
@@ -22,117 +18,139 @@ class Predictor:
         self.feature_names = FeatureConfig.ALL_FEATURES
 
     def load(self, stage: str = "Production") -> None:
-        """Загрузка из MLflow Model Registry."""
+        """
+        Загрузка из MLflow Model Registry.
+        НЕ падает если модели нет — просто логирует warning.
+        """
+        mlflow.set_tracking_uri(MLflowConfig.TRACKING_URI)
+
+        # Попытка 1: MLflow Registry
         try:
-            self.model = mlflow.pyfunc.load_model(
-                f"models:/credit_scoring/{stage}"
-            )
-            self.model_version = "production_v1"
-            logger.info(
-                f"Model loaded from MLflow: {self.model_version}"
-            )
+            self._load_from_mlflow(stage)
+            return
         except Exception as e:
-            logger.warning(
-                f"MLflow model not found ({e}), "
-                f"trying local fallback..."
-            )
+            logger.warning(f"MLflow model not found: {e}")
+
+        # Попытка 2: локальный файл
+        try:
             self._load_local_fallback()
+            return
+        except Exception as e:
+            logger.warning(f"Local fallback not found: {e}")
+
+        # Попытка 3: заглушка для разработки
+        logger.warning(
+            "No model found. API will start without a model. "
+            "/predict will return 503 until a model is loaded."
+        )
+        self.model = None
+        self.model_version = None
+
+    def _load_from_mlflow(self, stage: str) -> None:
+        """Загрузка из MLflow по alias (новый API) или stage (старый)."""
+        try:
+            # Новый API MLflow 2.9+: aliases вместо stages
+            model_uri = f"models:/credit_scoring@champion"
+            self.model = mlflow.pyfunc.load_model(model_uri)
+            self.model_version = "champion"
+            logger.info("Model loaded from MLflow (alias: champion)")
+            return
+        except Exception:
+            pass
+
+        # Старый API: stage
+        model_uri = f"models:/credit_scoring/{stage}"
+        self.model = mlflow.pyfunc.load_model(model_uri)
+        self.model_version = f"mlflow_{stage.lower()}"
+        logger.info(f"Model loaded from MLflow (stage: {stage})")
 
     def _load_local_fallback(self) -> None:
-        """Загрузка из локального файла (для разработки)."""
+        """Загрузка из локального файла."""
         import pickle
         from pathlib import Path
 
         model_path = Path("artifacts/model.pkl")
-        if model_path.exists():
-            with open(model_path, "rb") as f:
-                self.model = pickle.load(f)
-            self.model_version = "local_dev"
-            logger.info("Loaded local model fallback")
-        else:
-            raise RuntimeError("No model found!")
+        if not model_path.exists():
+            raise FileNotFoundError(f"No model at {model_path}")
 
-    def _compute_features(
-        self, request: ScoringRequest
-    ) -> pd.DataFrame:
-        """Online feature computation из raw запроса."""
+        with open(model_path, "rb") as f:
+            self.model = pickle.load(f)
+        self.model_version = "local_dev"
+        logger.info("Model loaded from local fallback")
+
+    def is_ready(self) -> bool:
+        return self.model is not None
+
+    def reload(self) -> None:
+        """Перезагрузка модели без рестарта API."""
+        logger.info("Reloading model...")
+        self.model = None
+        self.model_version = None
+        self.explainer = None
+        self.load()
+
+    def _compute_features(self, request: ScoringRequest) -> pd.DataFrame:
         features = {}
 
-        # числовые трансформации
         features["loan_to_income"] = (
             request.loan_amount / request.income
+            if request.income > 0 else 0.0
         )
         features["credit_utilization"] = (
-            request.loan_amount / max(request.total_credit_limit, 1)
+            request.loan_amount / request.total_credit_limit
+            if request.total_credit_limit > 0 else 0.0
         )
         features["income_log"] = np.log1p(request.income)
         features["loan_amount_log"] = np.log1p(request.loan_amount)
-        features["dti_ratio_clipped"] = np.clip(
-            request.dti_ratio, 0, 100
-        )
+        features["dti_ratio_clipped"] = np.clip(request.dti_ratio, 0, 100)
+        features["loan_amount_x_dti"] = request.loan_amount * request.dti_ratio
+        features["income_x_credit_score"] = request.income * request.credit_score
 
-        # кросс-фичи
-        features["loan_amount_x_dti"] = (
-            request.loan_amount * request.dti_ratio
-        )
-        features["income_x_credit_score"] = (
-            request.income * request.credit_score
-        )
-
-        # target encoded (используем global_mean как fallback)
+        # target encoding: используем global_mean как fallback
         features["purpose_target_enc"] = 0.15
         features["home_ownership_target_enc"] = 0.15
 
-        # агрегаты из payment_history недоступны онлайн
-        # → используем нули / средние значения
-        agg_features = [
-            "avg_days_overdue_30d",
-            "avg_days_overdue_90d",
-            "avg_days_overdue_180d",
-            "max_days_overdue_90d",
-            "pct_late_payments_90d",
-            "total_paid_90d",
-            "payment_consistency_90d",
-            "bureau_balance_to_income",
-            "inquiries_per_account",
-        ]
-        for feat in agg_features:
+        # aggregation: недоступны онлайн
+        for feat in FeatureConfig.AGGREGATION_FEATURES:
             features[feat] = 0.0
+        features["bureau_balance_to_income"] = 0.0
+        features["inquiries_per_account"] = 0.0
 
-        return pd.DataFrame([features])
+        df = pd.DataFrame([features])
+
+        # гарантируем порядок и полноту колонок
+        for col in FeatureConfig.ALL_FEATURES:
+            if col not in df.columns:
+                df[col] = 0.0
+
+        return df[FeatureConfig.ALL_FEATURES]
 
     def predict(self, request: ScoringRequest) -> ScoringResponse:
         features_df = self._compute_features(request)
 
-        # инференс
         if hasattr(self.model, "predict_proba"):
-            pd_score = float(
-                self.model.predict_proba(features_df)[:, 1][0]
-            )
+            pd_score = float(self.model.predict_proba(features_df)[:, 1][0])
         else:
             pd_score = float(self.model.predict(features_df)[0])
 
-        # калибровка (простая линейная — заменить на реальную)
         pd_calibrated = pd_score
-
         risk_bucket = get_risk_bucket(pd_calibrated)
 
-        # SHAP (если модель поддерживает)
         top_reasons = []
         try:
             if self.explainer is None:
-                self.explainer = shap.TreeExplainer(
+                import shap
+                underlying = (
                     self.model._model_impl
                     if hasattr(self.model, "_model_impl")
                     else self.model
                 )
+                self.explainer = shap.TreeExplainer(underlying)
             shap_vals = self.explainer.shap_values(features_df)[0]
             raw_reasons = get_top_reasons(
                 shap_vals, features_df.columns.tolist()
             )
-            top_reasons = [
-                ReasonCode(**r) for r in raw_reasons
-            ]
+            top_reasons = [ReasonCode(**r) for r in raw_reasons]
         except Exception as e:
             logger.warning(f"SHAP computation failed: {e}")
 
@@ -148,6 +166,7 @@ class Predictor:
     def get_model_info(self) -> dict:
         return {
             "model_version": self.model_version,
+            "model_loaded": self.is_ready(),
             "feature_count": len(self.feature_names),
             "features": self.feature_names,
         }

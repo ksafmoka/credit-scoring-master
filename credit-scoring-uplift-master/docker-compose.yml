@@ -18,6 +18,9 @@ x-airflow-common: &airflow-common
     APP_DB_NAME: credit_scoring
     APP_DB_USER: ml_user
     APP_DB_PASSWORD: ml_password
+
+    LENDING_CLUB_CSV_PATH: /opt/airflow/data/lending_club.csv
+
   volumes:
     - ./dags:/opt/airflow/dags
     - ./src:/opt/airflow/src

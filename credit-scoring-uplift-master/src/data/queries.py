@@ -21,7 +21,8 @@ def get_raw_applications(
     if limit:
         query += f" LIMIT {limit}"
 
-    return pd.read_sql(query, engine)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn)
 
 
 def get_payment_history(
@@ -32,7 +33,9 @@ def get_payment_history(
     if application_ids:
         ids_str = ", ".join(map(str, application_ids))
         query += f" WHERE application_id IN ({ids_str})"
-    return pd.read_sql(query, engine)
+
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn)
 
 
 def get_feature_dataset(
@@ -41,9 +44,6 @@ def get_feature_dataset(
     val_end: str,
     feature_version: str = "v1.0",
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Возвращает (train, val, test) с time-based split.
-    """
     query = f"""
         SELECT
             f.*,
@@ -55,7 +55,10 @@ def get_feature_dataset(
             ON f.application_id = a.application_id
         WHERE f.feature_version = '{feature_version}'
     """
-    df = pd.read_sql(query, engine)
+
+    with engine.connect() as conn:
+        df = pd.read_sql(query, conn)
+
     df["application_date"] = pd.to_datetime(df["application_date"])
 
     train = df[df["application_date"] <= train_end]
