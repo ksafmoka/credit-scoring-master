@@ -4,7 +4,7 @@ End-to-end ML system for **probability of default (PD)** scoring:
 
 CSV → PostgreSQL → Airflow feature engineering → CatBoost / LightGBM / XGBoost + stacking → MLflow → FastAPI → Grafana
 
-> Scope: **default prediction only** (no uplift).
+> Scope: **default prediction**
 
 ## Quick start (local, no Docker)
 
@@ -123,7 +123,6 @@ data/sample_applications.csv   # demo CSV (regenerate via scripts/)
 
 - [Apply / run](docs/APPLY_CHANGES.md)
 - [System overview](docs/SYSTEM_OVERVIEW.md)
-- [Changelog of fixes](docs/CHANGELOG_FIXES.md)
 - [Architecture](docs/architecture.md)
 - [Features](docs/feature_documentation.md)
 - [Model card](docs/model_card.md)
