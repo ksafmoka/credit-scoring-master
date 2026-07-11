@@ -1,4 +1,4 @@
-# configs/model_config.yaml
+# PD model training configuration
 
 scoring:
   models:
@@ -7,10 +7,10 @@ scoring:
     - xgboost
   ensemble: true
   calibration: isotonic
-  min_auc_for_registration: 0.75
-  optuna_trials: 50
-
-# uplift:
-#   learner: t_learner  # или x_learner
-#   treatment_col: treatment_flag
-#   min_qini_for_registration: 0.05
+  min_auc_for_registration: 0.70
+  optuna_trials: 15
+  time_split:
+    train_end: "2022-12-31"
+    val_end: "2023-06-30"
+  registered_model_name: credit_scoring
+  model_alias: champion

@@ -11,19 +11,11 @@ CREATE TABLE IF NOT EXISTS predictions.scoring_predictions (
     predicted_at    TIMESTAMP DEFAULT NOW()
 );
 
--- CREATE TABLE IF NOT EXISTS predictions.uplift_predictions (
---     prediction_id       BIGSERIAL PRIMARY KEY,
---     client_id           BIGINT NOT NULL,
---     model_version       VARCHAR(100) NOT NULL,
---     uplift_score        NUMERIC(10, 8),
---     segment             VARCHAR(30),
---     recommended_action  VARCHAR(50),
---     predicted_at        TIMESTAMP DEFAULT NOW()
--- );
+CREATE INDEX IF NOT EXISTS idx_pred_app
+    ON predictions.scoring_predictions (application_id);
+CREATE INDEX IF NOT EXISTS idx_pred_time
+    ON predictions.scoring_predictions (predicted_at);
 
--- ─────────────────────────────────────────
--- Monitoring tables
--- ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS monitoring.feature_drift (
     check_id            BIGSERIAL PRIMARY KEY,
     feature_name        VARCHAR(100) NOT NULL,
@@ -48,3 +40,8 @@ CREATE TABLE IF NOT EXISTS monitoring.model_performance (
     num_predictions     INT,
     checked_at          TIMESTAMP DEFAULT NOW()
 );
+
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA predictions TO ml_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA monitoring TO ml_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA predictions TO ml_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA monitoring TO ml_user;

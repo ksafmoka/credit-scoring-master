@@ -1,10 +1,8 @@
-# docker/Dockerfile.airflow
-
 FROM apache/airflow:2.8.1-python3.11
 
 USER root
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libpq-dev \
@@ -14,7 +12,6 @@ RUN apt-get update && apt-get install -y \
 USER airflow
 
 COPY requirements/requirements-airflow.txt /tmp/requirements-airflow.txt
-
 RUN pip install --no-cache-dir -r /tmp/requirements-airflow.txt
 
 ENV PYTHONPATH="/opt/airflow:${PYTHONPATH}"

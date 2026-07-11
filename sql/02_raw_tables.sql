@@ -1,8 +1,6 @@
 \c credit_scoring;
 
--- ─────────────────────────────────────────
--- Заявки на кредит
--- ─────────────────────────────────────────
+-- Applications
 CREATE TABLE IF NOT EXISTS raw.applications (
     application_id      BIGSERIAL PRIMARY KEY,
     client_id           BIGINT NOT NULL,
@@ -19,25 +17,16 @@ CREATE TABLE IF NOT EXISTS raw.applications (
     num_open_accounts   INT,
     num_delinquencies   INT,
     total_credit_limit  NUMERIC(14, 2),
-    -- target
     is_default          BOOLEAN,
-    -- для uplift: получил ли клиент предложение рефинансирования
-    treatment_flag      BOOLEAN DEFAULT FALSE,
-    -- метаданные загрузки
     loaded_at           TIMESTAMP DEFAULT NOW(),
     data_source         VARCHAR(50) DEFAULT 'lending_club'
 );
 
-CREATE INDEX IF NOT EXISTS idx_app_client
-    ON raw.applications (client_id);
-CREATE INDEX IF NOT EXISTS idx_app_date
-    ON raw.applications (application_date);
-CREATE INDEX IF NOT EXISTS idx_app_default
-    ON raw.applications (is_default);
+CREATE INDEX IF NOT EXISTS idx_app_client ON raw.applications (client_id);
+CREATE INDEX IF NOT EXISTS idx_app_date ON raw.applications (application_date);
+CREATE INDEX IF NOT EXISTS idx_app_default ON raw.applications (is_default);
 
--- ─────────────────────────────────────────
--- История платежей
--- ─────────────────────────────────────────
+-- Payment history (pre-application for features)
 CREATE TABLE IF NOT EXISTS raw.payment_history (
     payment_id          BIGSERIAL PRIMARY KEY,
     application_id      BIGINT REFERENCES raw.applications (application_id),
@@ -48,14 +37,10 @@ CREATE TABLE IF NOT EXISTS raw.payment_history (
     loaded_at           TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_payment_app
-    ON raw.payment_history (application_id);
-CREATE INDEX IF NOT EXISTS idx_payment_date
-    ON raw.payment_history (payment_date);
+CREATE INDEX IF NOT EXISTS idx_payment_app ON raw.payment_history (application_id);
+CREATE INDEX IF NOT EXISTS idx_payment_date ON raw.payment_history (payment_date);
 
--- ─────────────────────────────────────────
--- Кредитное бюро
--- ─────────────────────────────────────────
+-- Credit bureau snapshots
 CREATE TABLE IF NOT EXISTS raw.credit_bureau (
     bureau_id               BIGSERIAL PRIMARY KEY,
     client_id               BIGINT NOT NULL,
@@ -68,7 +53,8 @@ CREATE TABLE IF NOT EXISTS raw.credit_bureau (
     loaded_at               TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bureau_client
-    ON raw.credit_bureau (client_id);
-CREATE INDEX IF NOT EXISTS idx_bureau_date
-    ON raw.credit_bureau (report_date);
+CREATE INDEX IF NOT EXISTS idx_bureau_client ON raw.credit_bureau (client_id);
+CREATE INDEX IF NOT EXISTS idx_bureau_date ON raw.credit_bureau (report_date);
+
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA raw TO ml_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA raw TO ml_user;

@@ -1,16 +1,18 @@
-# requirements/requirements-api.txt
-
 fastapi==0.109.0
 uvicorn==0.27.0
 pydantic==2.6.0
 
 mlflow==2.10.0
+# Needed to unpickle local / MLflow models
 catboost==1.2.3
+lightgbm==4.3.0
+xgboost==2.0.3
 scikit-learn==1.4.0
 shap==0.44.1
 
 pandas==2.2.0
 numpy==1.26.4
+scipy==1.12.0
 
 sqlalchemy==2.0.25
 psycopg2-binary==2.9.9

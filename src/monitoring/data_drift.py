@@ -1,10 +1,17 @@
-# src/monitoring/data_drift.py
+"""Feature drift monitoring (PSI / KS)."""
 
-import pandas as pd
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Engine
+
 import numpy as np
+import pandas as pd
+from src.logging_utils import get_logger
+logger = get_logger(__name__)
 from scipy import stats
-from loguru import logger
-from sqlalchemy.engine import Engine
 
 from src.config import MonitoringConfig
 
@@ -15,28 +22,25 @@ def compute_psi(
     n_bins: int = 10,
 ) -> float:
     """Population Stability Index."""
-    ref_clean = reference.dropna()
-    cur_clean = current.dropna()
+    ref_clean = pd.to_numeric(reference, errors="coerce").dropna()
+    cur_clean = pd.to_numeric(current, errors="coerce").dropna()
+    if len(ref_clean) < 10 or len(cur_clean) < 10:
+        return 0.0
 
-    breakpoints = np.percentile(
-        ref_clean, np.linspace(0, 100, n_bins + 1)
+    breakpoints = np.unique(
+        np.percentile(ref_clean, np.linspace(0, 100, n_bins + 1))
     )
-    breakpoints = np.unique(breakpoints)
-
     if len(breakpoints) < 2:
         return 0.0
 
     ref_counts = np.histogram(ref_clean, bins=breakpoints)[0]
     cur_counts = np.histogram(cur_clean, bins=breakpoints)[0]
-
     ref_pct = ref_counts / max(ref_counts.sum(), 1)
     cur_pct = cur_counts / max(cur_counts.sum(), 1)
-
     ref_pct = np.clip(ref_pct, 1e-6, None)
     cur_pct = np.clip(cur_pct, 1e-6, None)
-
-    psi = np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct))
-    return float(psi)
+    psi = float(np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct)))
+    return psi
 
 
 def run_drift_check(
@@ -48,70 +52,81 @@ def run_drift_check(
     features: list[str],
     check_date: str,
 ) -> list[dict]:
-    """Полная проверка дрифта с записью в monitoring схему."""
-    with engine.connect() as conn:
-        ref_df = pd.read_sql(f"""
-            SELECT {', '.join(features)}
-            FROM features.application_features
-            WHERE feature_date BETWEEN '{reference_start}' AND '{reference_end}'
-        """, conn)
+    from sqlalchemy import text
 
-        cur_df = pd.read_sql(f"""
-            SELECT {', '.join(features)}
-            FROM features.application_features
-            WHERE feature_date BETWEEN '{current_start}' AND '{current_end}'
-        """, conn)
-
-    if len(ref_df) < 100 or len(cur_df) < 100:
-        logger.warning(
-            "Not enough data for drift check. Skipping."
-        )
+    safe_features = [f for f in features if f.isidentifier()]
+    if not safe_features:
         return []
 
-    results = []
-    for feature in features:
+    cols = ", ".join(safe_features)
+    with engine.connect() as conn:
+        ref_df = pd.read_sql(
+            text(
+                f"""
+                SELECT {cols}
+                FROM features.application_features
+                WHERE feature_date BETWEEN :reference_start AND :reference_end
+                """
+            ),
+            conn,
+            params={
+                "reference_start": reference_start,
+                "reference_end": reference_end,
+            },
+        )
+        cur_df = pd.read_sql(
+            text(
+                f"""
+                SELECT {cols}
+                FROM features.application_features
+                WHERE feature_date BETWEEN :current_start AND :current_end
+                """
+            ),
+            conn,
+            params={
+                "current_start": current_start,
+                "current_end": current_end,
+            },
+        )
+
+    if len(ref_df) < 100 or len(cur_df) < 100:
+        logger.warning("Not enough data for drift check. Skipping.")
+        return []
+
+    results: list[dict] = []
+    for feature in safe_features:
         if feature not in ref_df.columns:
             continue
-
         psi = compute_psi(ref_df[feature], cur_df[feature])
-
         ks_stat, ks_pval = stats.ks_2samp(
-            ref_df[feature].dropna(),
-            cur_df[feature].dropna(),
+            pd.to_numeric(ref_df[feature], errors="coerce").dropna(),
+            pd.to_numeric(cur_df[feature], errors="coerce").dropna(),
         )
-
         is_drifted = psi > MonitoringConfig.PSI_THRESHOLD
-        is_warning = (
-            psi > MonitoringConfig.PSI_WARNING and not is_drifted
-        )
+        is_warning = psi > MonitoringConfig.PSI_WARNING and not is_drifted
 
         if is_drifted:
-            logger.error(
-                f"DRIFT: {feature}, PSI={psi:.4f}"
-            )
+            logger.error(f"DRIFT: {feature}, PSI={psi:.4f}")
             _send_alert(
-                f"⚠️ Feature drift detected!\n"
-                f"Feature: {feature}\n"
-                f"PSI: {psi:.4f} (threshold: "
-                f"{MonitoringConfig.PSI_THRESHOLD})"
+                f"Feature drift detected!\nFeature: {feature}\n"
+                f"PSI: {psi:.4f} (threshold: {MonitoringConfig.PSI_THRESHOLD})"
             )
         elif is_warning:
-            logger.warning(
-                f"WARNING drift: {feature}, PSI={psi:.4f}"
-            )
+            logger.warning(f"WARNING drift: {feature}, PSI={psi:.4f}")
 
-        results.append({
-            "feature_name": feature,
-            "check_date": check_date,
-            "psi_value": psi,
-            "ks_statistic": ks_stat,
-            "ks_pvalue": ks_pval,
-            "is_drifted": is_drifted,
-            "reference_period": f"{reference_start}/{reference_end}",
-            "current_period": f"{current_start}/{current_end}",
-        })
+        results.append(
+            {
+                "feature_name": feature,
+                "check_date": check_date,
+                "psi_value": psi,
+                "ks_statistic": float(ks_stat),
+                "ks_pvalue": float(ks_pval),
+                "is_drifted": bool(is_drifted),
+                "reference_period": f"{reference_start}/{reference_end}",
+                "current_period": f"{current_start}/{current_end}",
+            }
+        )
 
-    # записываем результаты
     if results:
         with engine.begin() as conn:
             pd.DataFrame(results).to_sql(
@@ -121,29 +136,22 @@ def run_drift_check(
                 if_exists="append",
                 index=False,
             )
-
     return results
 
 
 def _send_alert(message: str) -> None:
-    """Отправка алерта в Telegram."""
     import requests
-    from src.config import MonitoringConfig
 
     token = MonitoringConfig.TELEGRAM_BOT_TOKEN
     chat_id = MonitoringConfig.TELEGRAM_CHAT_ID
-
     if not token or not chat_id:
-        logger.warning(
-            "Telegram not configured, skipping alert"
-        )
+        logger.warning("Telegram not configured, skipping alert")
         return
-
     try:
         requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
             json={"chat_id": chat_id, "text": message},
             timeout=5,
         )
-    except Exception as e:
-        logger.error(f"Failed to send alert: {e}")
+    except Exception as exc:
+        logger.error(f"Failed to send alert: {exc}")

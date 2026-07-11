@@ -1,0 +1,123 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Applications (raw)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS value FROM raw.applications;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Feature rows",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS value FROM features.application_features;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+    },
+    {
+      "type": "stat",
+      "title": "Predictions",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS value FROM predictions.scoring_predictions;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+    },
+    {
+      "type": "stat",
+      "title": "Drift flags",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "rawSql": "SELECT COUNT(*) AS value FROM monitoring.feature_drift WHERE is_drifted;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Mean calibrated PD (daily)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  DATE(predicted_at) AS time,\n  AVG(pd_calibrated)::double precision AS mean_pd\nFROM predictions.scoring_predictions\nGROUP BY 1\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+    },
+    {
+      "type": "table",
+      "title": "Latest feature drift (PSI)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        {
+          "rawSql": "SELECT feature_name, check_date, psi_value, ks_statistic, is_drifted\nFROM monitoring.feature_drift\nORDER BY checked_at DESC\nLIMIT 50;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+    },
+    {
+      "type": "piechart",
+      "title": "Risk bucket mix",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "rawSql": "SELECT risk_bucket AS metric, COUNT(*) AS value\nFROM predictions.scoring_predictions\nGROUP BY 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Default rate by application month",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  date_trunc('month', application_date)::timestamp AS time,\n  AVG(CASE WHEN is_default THEN 1.0 ELSE 0.0 END)::double precision AS default_rate\nFROM raw.applications\nGROUP BY 1\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["credit-scoring", "pd"],
+  "templating": { "list": [] },
+  "time": { "from": "now-90d", "to": "now" },
+  "title": "Credit Scoring PD Overview",
+  "uid": "credit-scoring-pd",
+  "version": 1
+}

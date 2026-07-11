@@ -1,7 +1,8 @@
-# src/serving/schemas.py
+"""Pydantic schemas for the scoring API."""
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional
+from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ScoringRequest(BaseModel):
@@ -19,6 +20,17 @@ class ScoringRequest(BaseModel):
     home_ownership: str
     purpose: str
 
+    # Optional online signals (default to 0 / missing when unknown)
+    avg_days_overdue_30d: float | None = None
+    avg_days_overdue_90d: float | None = None
+    avg_days_overdue_180d: float | None = None
+    max_days_overdue_90d: float | None = None
+    pct_late_payments_90d: float | None = None
+    total_paid_90d: float | None = None
+    payment_consistency_90d: float | None = None
+    bureau_balance_to_income: float | None = None
+    inquiries_per_account: float | None = None
+
     @field_validator("home_ownership")
     @classmethod
     def validate_home_ownership(cls, v: str) -> str:
@@ -26,6 +38,11 @@ class ScoringRequest(BaseModel):
         if v.upper() not in allowed:
             raise ValueError(f"home_ownership must be one of {allowed}")
         return v.upper()
+
+    @field_validator("purpose")
+    @classmethod
+    def normalize_purpose(cls, v: str) -> str:
+        return v.strip().lower()
 
 
 class ReasonCode(BaseModel):
@@ -35,7 +52,6 @@ class ReasonCode(BaseModel):
 
 
 class ScoringResponse(BaseModel):
-    # Фикс Pydantic warning
     model_config = ConfigDict(protected_namespaces=())
 
     application_id: int
