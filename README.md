@@ -82,7 +82,6 @@ make up
 
 <img width="980" height="640" alt="architecture_diagram" src="https://github.com/user-attachments/assets/e1ec2801-5ce1-4fe2-8f61-2ba8af37f38f" />
 <svg xmlns="http://www.w3.org/2000/svg" width="980" height="640" viewBox="0 0 980 640">
-</svg>
 
 
 ## DAGs
