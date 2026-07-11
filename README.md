@@ -80,20 +80,6 @@ make up
 
 ## Architecture
 
-```text
-CSV (sample / Lending Club)
-        │
-        ▼
-   PostgreSQL  (raw / features / predictions / monitoring)
-        │
-   Airflow DAGs
-     data_ingestion → feature_engineering → model_training
-                   → batch_prediction → monitoring
-        │
-   ┌────┴────┬──────────┐
-   MLflow    FastAPI    Grafana
-             /predict
-```
 <img width="980" height="640" alt="architecture_diagram" src="https://github.com/user-attachments/assets/e1ec2801-5ce1-4fe2-8f61-2ba8af37f38f" />
 <svg xmlns="http://www.w3.org/2000/svg" width="980" height="640" viewBox="0 0 980 640">
   <defs>
@@ -175,8 +161,6 @@ CSV (sample / Lending Club)
   <line x1="710" y1="380" x2="490" y2="415" stroke="#57606a" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
   <line x1="710" y1="380" x2="790" y2="415" stroke="#57606a" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
 
-  <text x="40" y="580" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#57606a">Leakage guards: pre-application payments/bureau · TE fit on train only · time-based split · DAG leakage checks</text>
-  <text x="40" y="602" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#57606a">Serving parity: model + feature medians + TE maps packaged in artifacts/</text>
 </svg>
 
 
