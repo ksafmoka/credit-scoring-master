@@ -18,33 +18,28 @@ class Predictor:
         self.feature_names = FeatureConfig.ALL_FEATURES
 
     def load(self, stage: str = "Production") -> None:
-        """
-        Загрузка из MLflow Model Registry.
-        НЕ падает если модели нет — просто логирует warning.
-        """
         mlflow.set_tracking_uri(MLflowConfig.TRACKING_URI)
 
-        # Попытка 1: MLflow Registry
         try:
             self._load_from_mlflow(stage)
             return
         except Exception as e:
             logger.warning(f"MLflow model not found: {e}")
 
-        # Попытка 2: локальный файл
         try:
             self._load_local_fallback()
             return
         except Exception as e:
             logger.warning(f"Local fallback not found: {e}")
 
-        # Попытка 3: заглушка для разработки
+        # НЕ падаем — просто стартуем без модели
         logger.warning(
             "No model found. API will start without a model. "
             "/predict will return 503 until a model is loaded."
         )
         self.model = None
         self.model_version = None
+
 
     def _load_from_mlflow(self, stage: str) -> None:
         """Загрузка из MLflow по alias (новый API) или stage (старый)."""

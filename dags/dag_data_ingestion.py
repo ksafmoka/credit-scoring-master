@@ -16,8 +16,8 @@ dag = DAG(
     dag_id="data_ingestion",
     default_args=default_args,
     description="Load raw data into PostgreSQL",
-    schedule_interval="@daily",
-    start_date=datetime(2026, 6, 26),
+    schedule_interval=None,
+    start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=["ingestion", "raw"],
 )

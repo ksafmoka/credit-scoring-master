@@ -2,6 +2,7 @@
 
 import pandas as pd
 from sqlalchemy.engine import Engine
+from sqlalchemy import text
 
 
 def get_raw_applications(
@@ -14,15 +15,13 @@ def get_raw_applications(
 
     if date:
         conditions.append(f"application_date <= '{date}'")
-
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
-
     if limit:
         query += f" LIMIT {limit}"
 
     with engine.connect() as conn:
-        return pd.read_sql(query, conn)
+        return pd.read_sql(text(query), conn)
 
 
 def get_payment_history(
@@ -35,7 +34,7 @@ def get_payment_history(
         query += f" WHERE application_id IN ({ids_str})"
 
     with engine.connect() as conn:
-        return pd.read_sql(query, conn)
+        return pd.read_sql(text(query), conn)
 
 
 def get_feature_dataset(
@@ -57,7 +56,7 @@ def get_feature_dataset(
     """
 
     with engine.connect() as conn:
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(text(query), conn)
 
     df["application_date"] = pd.to_datetime(df["application_date"])
 
