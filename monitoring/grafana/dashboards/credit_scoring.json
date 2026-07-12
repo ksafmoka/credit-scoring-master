@@ -10,199 +10,114 @@
       "type": "stat",
       "title": "Applications (raw)",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-          "rawSql": "SELECT COUNT(*)::bigint AS \"Applications\" FROM raw.applications;",
+          "rawSql": "SELECT COUNT(*) AS value FROM raw.applications;",
           "format": "table",
           "refId": "A"
         }
       ],
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "none"
-      },
-      "fieldConfig": {
-        "defaults": { "unit": "none", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } },
-        "overrides": []
-      }
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
     },
     {
       "type": "stat",
       "title": "Feature rows",
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-          "rawSql": "SELECT COUNT(*)::bigint AS \"Features\" FROM features.application_features;",
+          "rawSql": "SELECT COUNT(*) AS value FROM features.application_features;",
           "format": "table",
           "refId": "A"
         }
       ],
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "none"
-      }
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
     },
     {
       "type": "stat",
       "title": "Predictions",
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-          "rawSql": "SELECT COUNT(*)::bigint AS \"Predictions\" FROM predictions.scoring_predictions;",
+          "rawSql": "SELECT COUNT(*) AS value FROM predictions.scoring_predictions;",
           "format": "table",
           "refId": "A"
         }
       ],
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "none"
-      }
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
     },
     {
       "type": "stat",
-      "title": "Default rate",
+      "title": "Drift flags",
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-          "rawSql": "SELECT ROUND(AVG(CASE WHEN is_default THEN 1.0 ELSE 0.0 END)::numeric, 4) AS \"Default rate\" FROM raw.applications;",
+          "rawSql": "SELECT COUNT(*) AS value FROM monitoring.feature_drift WHERE is_drifted;",
           "format": "table",
           "refId": "A"
         }
       ],
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "none"
-      },
-      "fieldConfig": {
-        "defaults": { "unit": "percentunit", "decimals": 2 },
-        "overrides": []
-      }
-    },
-    {
-      "type": "timeseries",
-      "title": "Applications per month",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
-      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-      "targets": [
-        {
-          "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-          "rawSql": "SELECT\n  date_trunc('month', application_date)::timestamptz AS time,\n  COUNT(*)::double precision AS applications\nFROM raw.applications\nGROUP BY 1\nORDER BY 1;",
-          "format": "time_series",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 40 } },
-        "overrides": []
-      },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "type": "timeseries",
-      "title": "Default rate by application month",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
-      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-      "targets": [
-        {
-          "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-          "rawSql": "SELECT\n  date_trunc('month', application_date)::timestamptz AS time,\n  AVG(CASE WHEN is_default THEN 1.0 ELSE 0.0 END)::double precision AS default_rate\nFROM raw.applications\nGROUP BY 1\nORDER BY 1;",
-          "format": "time_series",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "percentunit", "min": 0, "max": 1 },
-        "overrides": []
-      }
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
     },
     {
       "type": "timeseries",
       "title": "Mean calibrated PD (daily)",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
-      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-          "rawSql": "SELECT\n  date_trunc('day', predicted_at)::timestamptz AS time,\n  AVG(pd_calibrated)::double precision AS mean_pd\nFROM predictions.scoring_predictions\nGROUP BY 1\nORDER BY 1;",
+          "rawSql": "SELECT\n  DATE(predicted_at) AS time,\n  AVG(pd_calibrated)::double precision AS mean_pd\nFROM predictions.scoring_predictions\nGROUP BY 1\nORDER BY 1;",
           "format": "time_series",
           "refId": "A"
         }
       ],
-      "fieldConfig": {
-        "defaults": { "unit": "percentunit", "min": 0, "max": 1 },
-        "overrides": []
-      }
-    },
-    {
-      "type": "piechart",
-      "title": "Risk bucket mix",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
-      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-      "targets": [
-        {
-          "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-          "rawSql": "SELECT risk_bucket AS metric, COUNT(*)::bigint AS value\nFROM predictions.scoring_predictions\nGROUP BY 1\nORDER BY 1;",
-          "format": "table",
-          "refId": "A"
-        }
-      ],
-      "options": {
-        "legend": { "displayMode": "table", "placement": "right", "values": ["value"] },
-        "pieType": "pie",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
-      }
-    },
-    {
-      "type": "table",
-      "title": "Sample features (20 rows)",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 },
-      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-      "targets": [
-        {
-          "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-          "rawSql": "SELECT application_id, feature_date, loan_to_income, credit_utilization,\n       income_log, purpose_target_enc, avg_days_overdue_90d,\n       bureau_balance_to_income, feature_version\nFROM features.application_features\nORDER BY application_id\nLIMIT 20;",
-          "format": "table",
-          "refId": "A"
-        }
-      ],
-      "options": { "showHeader": true }
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
     },
     {
       "type": "table",
       "title": "Latest feature drift (PSI)",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 30 },
-      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
       "targets": [
         {
-          "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
-          "rawSql": "SELECT feature_name, check_date, psi_value, ks_statistic, is_drifted, checked_at\nFROM monitoring.feature_drift\nORDER BY checked_at DESC\nLIMIT 50;",
+          "rawSql": "SELECT feature_name, check_date, psi_value, ks_statistic, is_drifted\nFROM monitoring.feature_drift\nORDER BY checked_at DESC\nLIMIT 50;",
           "format": "table",
           "refId": "A"
         }
       ],
-      "options": { "showHeader": true }
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+    },
+    {
+      "type": "piechart",
+      "title": "Risk bucket mix",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "rawSql": "SELECT risk_bucket AS metric, COUNT(*) AS value\nFROM predictions.scoring_predictions\nGROUP BY 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+    },
+    {
+      "type": "timeseries",
+      "title": "Default rate by application month",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  date_trunc('month', application_date)::timestamp AS time,\n  AVG(CASE WHEN is_default THEN 1.0 ELSE 0.0 END)::double precision AS default_rate\nFROM raw.applications\nGROUP BY 1\nORDER BY 1;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
     }
   ],
   "schemaVersion": 39,
   "style": "dark",
   "tags": ["credit-scoring", "pd"],
   "templating": { "list": [] },
-  "time": { "from": "now-5y", "to": "now" },
-  "timepicker": {},
-  "timezone": "browser",
+  "time": { "from": "now-90d", "to": "now" },
   "title": "Credit Scoring PD Overview",
   "uid": "credit-scoring-pd",
-  "version": 2
+  "version": 1
 }

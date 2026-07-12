@@ -8,33 +8,37 @@ CREATE TABLE IF NOT EXISTS features.application_features (
     application_id              BIGINT PRIMARY KEY,
     feature_date                DATE NOT NULL,
 
-    loan_to_income              DOUBLE PRECISION,
-    credit_utilization          DOUBLE PRECISION,
-    income_log                  DOUBLE PRECISION,
-    loan_amount_log             DOUBLE PRECISION,
-    dti_ratio_clipped           DOUBLE PRECISION,
-    employment_years            DOUBLE PRECISION,
-    credit_score_norm           DOUBLE PRECISION,
-    num_open_accounts           DOUBLE PRECISION,
-    num_delinquencies           DOUBLE PRECISION,
-    interest_rate               DOUBLE PRECISION,
-    loan_amount_x_dti           DOUBLE PRECISION,
-    income_x_credit_score       DOUBLE PRECISION,
+    -- numerical / cross
+    loan_to_income              NUMERIC(10, 6),
+    credit_utilization          NUMERIC(10, 6),
+    income_log                  NUMERIC(10, 6),
+    loan_amount_log             NUMERIC(10, 6),
+    dti_ratio_clipped           NUMERIC(6, 2),
+    employment_years            NUMERIC(6, 2),
+    credit_score_norm           NUMERIC(8, 6),
+    num_open_accounts           NUMERIC(8, 2),
+    num_delinquencies           NUMERIC(8, 2),
+    interest_rate               NUMERIC(6, 3),
+    loan_amount_x_dti           NUMERIC(14, 6),
+    income_x_credit_score       NUMERIC(14, 6),
 
+    -- descriptive buckets (not always used by model)
     dti_bucket                  VARCHAR(20),
     credit_score_bucket         VARCHAR(20),
 
-    avg_days_overdue_30d        DOUBLE PRECISION,
-    avg_days_overdue_90d        DOUBLE PRECISION,
-    avg_days_overdue_180d       DOUBLE PRECISION,
-    max_days_overdue_90d        DOUBLE PRECISION,
-    pct_late_payments_90d       DOUBLE PRECISION,
-    total_paid_90d              DOUBLE PRECISION,
-    payment_consistency_90d     DOUBLE PRECISION,
+    -- payment aggregates
+    avg_days_overdue_30d        NUMERIC(8, 4),
+    avg_days_overdue_90d        NUMERIC(8, 4),
+    avg_days_overdue_180d       NUMERIC(8, 4),
+    max_days_overdue_90d        NUMERIC(8, 4),
+    pct_late_payments_90d       NUMERIC(6, 4),
+    total_paid_90d              NUMERIC(14, 2),
+    payment_consistency_90d     NUMERIC(6, 4),
 
-    bureau_balance_to_income    DOUBLE PRECISION,
-    inquiries_per_account       DOUBLE PRECISION,
-    avg_account_age_months      DOUBLE PRECISION,
+    -- bureau
+    bureau_balance_to_income    NUMERIC(10, 6),
+    inquiries_per_account       NUMERIC(8, 4),
+    avg_account_age_months      NUMERIC(8, 2),
 
     purpose_target_enc          DOUBLE PRECISION,
     home_ownership_target_enc   DOUBLE PRECISION,
@@ -48,4 +52,5 @@ CREATE INDEX IF NOT EXISTS idx_feat_date
 CREATE INDEX IF NOT EXISTS idx_feat_version
     ON features.application_features (feature_version);
 
-RESET ROLE;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA features TO ml_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA features TO ml_user;
