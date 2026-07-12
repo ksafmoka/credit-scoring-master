@@ -46,16 +46,27 @@ class MLflowConfig:
 
 
 class TrainingConfig:
-    TRAIN_END_DATE: str = "2022-12-31"
-    VAL_END_DATE: str = "2023-06-30"
+    # Overridable via env (set by prepare_lending_club.py → .env)
+    TRAIN_END_DATE: str = os.getenv("TRAIN_END_DATE", "2022-12-31")
+    VAL_END_DATE: str = os.getenv("VAL_END_DATE", "2023-06-30")
     RANDOM_SEED: int = 42
-    N_OPTUNA_TRIALS: int = 15
+    N_OPTUNA_TRIALS: int = int(os.getenv("N_OPTUNA_TRIALS", "15"))
     CV_FOLDS: int = 5
     TARGET_COL: str = "is_default"
     ID_COL: str = "application_id"
     DATE_COL: str = "application_date"
-    MIN_AUC_FOR_REGISTRATION: float = 0.70
-    CALIBRATION_METHOD: str = "isotonic"  # isotonic | sigmoid | none
+    MIN_AUC_FOR_REGISTRATION: float = float(
+        os.getenv("MIN_AUC_FOR_REGISTRATION", "0.70")
+    )
+    CALIBRATION_METHOD: str = os.getenv(
+        "CALIBRATION_METHOD", "isotonic"
+    )  # isotonic | sigmoid | none
+    # If train/val empty with fixed dates, auto-split by quantiles of application_date
+    AUTO_DATE_SPLIT: bool = os.getenv("AUTO_DATE_SPLIT", "true").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
 class MonitoringConfig:
@@ -63,8 +74,15 @@ class MonitoringConfig:
     PSI_WARNING: float = 0.10
     AUC_DROP_THRESHOLD: float = 0.03
     MIN_PREDICTIONS_FOR_CHECK: int = 100
-    TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
+
+    # Read at call-time so Docker env changes apply without import-order issues
+    @staticmethod
+    def telegram_bot_token() -> str:
+        return os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+
+    @staticmethod
+    def telegram_chat_id() -> str:
+        return os.getenv("TELEGRAM_CHAT_ID", "").strip()
 
 
 class FeatureConfig:

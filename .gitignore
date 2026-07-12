@@ -17,6 +17,7 @@ logs/
 artifacts/*
 !artifacts/.gitkeep
 mlflow_artifacts/
+!mlflow_artifacts/.gitkeep
 .idea/
 .vscode/
 *.swp

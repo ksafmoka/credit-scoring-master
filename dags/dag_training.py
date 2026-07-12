@@ -4,22 +4,17 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from airflow import DAG
 from airflow.operators.python import BranchPythonOperator, PythonOperator
 from airflow.utils.task_group import TaskGroup
 
-from src.config import (
-    ARTIFACTS_DIR,
-    MLflowConfig,
-    TrainingConfig,
-)
+from src.config import ARTIFACTS_DIR, MLflowConfig, TrainingConfig
 
 default_args = {
     "owner": "ml-team",
     "retries": 1,
-    "retry_delay": timedelta(minutes=10),
+    "retry_delay": timedelta(minutes=5),
 }
 
 dag = DAG(
@@ -30,16 +25,22 @@ dag = DAG(
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=["training", "ml"],
+    max_active_runs=1,
 )
 
 
 def prepare_datasets(**context):
     from src.config import get_db_engine
+    from src.mlflow_utils import ensure_experiment
     from src.models.scoring.train import prepare_time_split
+
+    # Create experiment once before parallel train tasks race on it
+    exp_id = ensure_experiment()
+    context["ti"].xcom_push(key="mlflow_experiment_id", value=exp_id)
 
     engine = get_db_engine()
     info = prepare_time_split(engine)
-    context["ti"].xcom_push(key="split_info", value=json.dumps(info))
+    context["ti"].xcom_push(key="split_info", value=json.dumps(info, default=str))
 
 
 def train_single_model(model_type: str, **context):
@@ -47,20 +48,18 @@ def train_single_model(model_type: str, **context):
     import mlflow.sklearn
 
     from src.config import get_db_engine
+    from src.mlflow_utils import ensure_experiment, log_dir_safe, log_model_safe
     from src.models.scoring.artifacts import ScoringArtifact
     from src.models.scoring.hyperopt import optimize_hyperparams
     from src.models.scoring.train import train_model
-    from src.features.target_encoding import RegularizedTargetEncoder
 
     engine = get_db_engine()
-    mlflow.set_tracking_uri(MLflowConfig.TRACKING_URI)
-    mlflow.set_experiment(MLflowConfig.EXPERIMENT_SCORING)
+    ensure_experiment()
 
-    n_trials = int(context.get("n_trials", TrainingConfig.N_OPTUNA_TRIALS))
-    # Keep CI/demo lighter unless overridden
-    n_trials = min(n_trials, 15)
+    n_trials = min(int(TrainingConfig.N_OPTUNA_TRIALS), 15)
+    run_date = context.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
 
-    with mlflow.start_run(run_name=f"{model_type}_{context['ds']}") as run:
+    with mlflow.start_run(run_name=f"{model_type}_{run_date}") as run:
         best_params = optimize_hyperparams(
             model_type=model_type,
             engine=engine,
@@ -96,44 +95,33 @@ def train_single_model(model_type: str, **context):
         )
         out_dir = ARTIFACTS_DIR / model_type
         artifact.save(out_dir)
+        # Also publish default serving artifact for the best single models
+        if model_type == "lightgbm":
+            artifact.save(ARTIFACTS_DIR)
 
-        mlflow.sklearn.log_model(model, artifact_path="model")
-        mlflow.log_artifacts(str(out_dir), artifact_path="scoring_bundle")
+        log_model_safe(model, artifact_path="model")
+        log_dir_safe(out_dir, artifact_path="scoring_bundle")
 
-        context["ti"].xcom_push(key=f"{model_type}_auc", value=metrics["val_auc_roc"])
+        context["ti"].xcom_push(
+            key=f"{model_type}_auc", value=metrics["val_auc_roc"]
+        )
         context["ti"].xcom_push(key=f"{model_type}_run_id", value=run.info.run_id)
 
 
 def train_ensemble(**context):
     import mlflow
-    import mlflow.sklearn
-    import numpy as np
-    import pandas as pd
 
     from src.config import get_db_engine
+    from src.mlflow_utils import ensure_experiment, log_dir_safe, log_model_safe
     from src.models.scoring.artifacts import ScoringArtifact
     from src.models.scoring.ensemble import StackingEnsemble
+    from src.models.scoring.ensemble_wrapper import EnsembleWrapper
 
     engine = get_db_engine()
-    mlflow.set_tracking_uri(MLflowConfig.TRACKING_URI)
-    mlflow.set_experiment(MLflowConfig.EXPERIMENT_SCORING)
+    ensure_experiment()
 
-    class EnsembleWrapper:
-        """Sklearn-like wrapper so MLflow can pickle predict_proba."""
-
-        def __init__(self, ensemble: StackingEnsemble):
-            self.ensemble = ensemble
-
-        def predict_proba(self, X):
-            if isinstance(X, np.ndarray):
-                X = pd.DataFrame(X, columns=self.ensemble.feature_names)
-            p1 = self.ensemble.predict_proba(X)
-            return np.column_stack([1 - p1, p1])
-
-        def predict(self, X):
-            return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
-
-    with mlflow.start_run(run_name=f"ensemble_{context['ds']}") as run:
+    run_date = context.get("ds") or datetime.utcnow().strftime("%Y-%m-%d")
+    with mlflow.start_run(run_name=f"ensemble_{run_date}") as run:
         ensemble = StackingEnsemble(
             base_models=["catboost", "lightgbm", "xgboost"],
         )
@@ -156,11 +144,11 @@ def train_ensemble(**context):
         )
         out_dir = ARTIFACTS_DIR / "ensemble"
         artifact.save(out_dir)
-        # Also publish as default local serving artifact
+        # Default serving artifact = ensemble
         artifact.save(ARTIFACTS_DIR)
 
-        mlflow.sklearn.log_model(wrapper, artifact_path="model")
-        mlflow.log_artifacts(str(out_dir), artifact_path="scoring_bundle")
+        log_model_safe(wrapper, artifact_path="model")
+        log_dir_safe(out_dir, artifact_path="scoring_bundle")
 
         context["ti"].xcom_push(key="ensemble_auc", value=metrics["val_auc_roc"])
         context["ti"].xcom_push(key="ensemble_run_id", value=run.info.run_id)
@@ -190,13 +178,14 @@ def register_model(**context):
     import mlflow
     from mlflow.tracking import MlflowClient
 
-    mlflow.set_tracking_uri(MLflowConfig.TRACKING_URI)
-    client = MlflowClient()
+    from src.mlflow_utils import ensure_experiment
+
+    ensure_experiment()
+    client = MlflowClient(tracking_uri=MLflowConfig.TRACKING_URI)
     run_id = context["ti"].xcom_pull(task_ids="ensemble", key="ensemble_run_id")
     auc = context["ti"].xcom_pull(task_ids="ensemble", key="ensemble_auc")
 
     if not run_id:
-        # fallback: best run in experiment
         experiment = client.get_experiment_by_name(MLflowConfig.EXPERIMENT_SCORING)
         if experiment is None:
             return
@@ -216,7 +205,6 @@ def register_model(**context):
     model_uri = f"runs:/{run_id}/model"
     result = mlflow.register_model(model_uri, MLflowConfig.REGISTERED_MODEL_NAME)
 
-    # Prefer modern aliases; keep stage transition as best-effort fallback
     try:
         client.set_registered_model_alias(
             name=MLflowConfig.REGISTERED_MODEL_NAME,
@@ -267,10 +255,16 @@ with dag:
     )
     t_skip = PythonOperator(
         task_id="skip",
-        python_callable=lambda: print("Model below AUC threshold; not registered"),
+        python_callable=lambda: print(
+            "Model below AUC threshold; not registered"
+        ),
     )
 
-    t_prepare >> base_group >> t_ensemble >> t_leakage >> t_decide >> [
-        t_register,
-        t_skip,
-    ]
+    (
+        t_prepare
+        >> base_group
+        >> t_ensemble
+        >> t_leakage
+        >> t_decide
+        >> [t_register, t_skip]
+    )

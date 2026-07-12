@@ -26,31 +26,30 @@ dag = DAG(
 
 def check_feature_drift(**context):
     from src.config import FeatureConfig, get_db_engine
-    from src.monitoring.data_drift import run_drift_check
+    from src.monitoring.data_drift import resolve_drift_windows, run_drift_check
 
     engine = get_db_engine()
     execution_date = context["ds"]
-    exec_dt = datetime.strptime(execution_date, "%Y-%m-%d")
 
-    reference_end = (exec_dt - timedelta(days=90)).strftime("%Y-%m-%d")
-    reference_start = (exec_dt - timedelta(days=180)).strftime("%Y-%m-%d")
-    current_start = (exec_dt - timedelta(days=7)).strftime("%Y-%m-%d")
+    windows = resolve_drift_windows(engine)
+    if not windows:
+        print("No feature data yet — skip drift")
+        return
 
     results = run_drift_check(
         engine=engine,
-        reference_start=reference_start,
-        reference_end=reference_end,
-        current_start=current_start,
-        current_end=execution_date,
+        reference_start=windows["reference_start"],
+        reference_end=windows["reference_end"],
+        current_start=windows["current_start"],
+        current_end=windows["current_end"],
         features=FeatureConfig.NUMERICAL_FEATURES
         + FeatureConfig.AGGREGATION_FEATURES,
         check_date=execution_date,
     )
     drifted = [r["feature_name"] for r in results if r["is_drifted"]]
     if drifted:
-        raise ValueError(
-            f"Drift detected in features: {drifted}. Consider retraining."
-        )
+        # Alert already sent/queued inside run_drift_check
+        print(f"Drift alerts issued for: {drifted}")
 
 
 def check_prediction_distribution(**context):
@@ -60,18 +59,17 @@ def check_prediction_distribution(**context):
     from src.config import get_db_engine
 
     engine = get_db_engine()
-    execution_date = context["ds"]
     with engine.connect() as conn:
         df = pd.read_sql(
             text(
                 """
                 SELECT pd_calibrated, risk_bucket
                 FROM predictions.scoring_predictions
-                WHERE DATE(predicted_at) = :execution_date
+                ORDER BY predicted_at DESC
+                LIMIT 5000
                 """
             ),
             conn,
-            params={"execution_date": execution_date},
         )
 
     if len(df) < 10:

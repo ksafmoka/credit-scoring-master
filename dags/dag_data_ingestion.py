@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta
 
 from airflow import DAG
@@ -29,18 +28,17 @@ dag = DAG(
 def load_raw_data(**context):
     from src.config import get_db_engine
     from src.data.ingestion import load_lending_club_data
+    from src.data.paths import resolve_applications_csv
 
     engine = get_db_engine()
-    filepath = os.getenv(
-        "LENDING_CLUB_CSV_PATH",
-        "/opt/airflow/data/sample_applications.csv",
+    # Prefers data/lending_club.csv when it exists; else sample_applications.csv
+    filepath = resolve_applications_csv()
+    n = load_lending_club_data(
+        filepath=filepath, engine=engine, replace=True
     )
-    # Prefer full lending_club.csv when present
-    alt = "/opt/airflow/data/lending_club.csv"
-    if filepath.endswith("sample_applications.csv") and os.path.exists(alt):
-        filepath = alt
-    n = load_lending_club_data(filepath=filepath, engine=engine, replace=True)
     context["ti"].xcom_push(key="rows_loaded", value=n)
+    context["ti"].xcom_push(key="source_file", value=str(filepath))
+    print(f"Loaded {n} rows from {filepath}")
 
 
 def generate_payment_history(**context):

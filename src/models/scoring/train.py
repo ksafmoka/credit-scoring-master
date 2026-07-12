@@ -18,6 +18,32 @@ from src.logging_utils import get_logger
 logger = get_logger(__name__)
 
 
+def _auto_date_cuts(engine: Engine) -> tuple[str, str] | None:
+    """70% / 85% quantiles of application_date from feature table."""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        df = pd.read_sql(
+            text(
+                """
+                SELECT a.application_date
+                FROM features.application_features f
+                JOIN raw.applications a ON a.application_id = f.application_id
+                """
+            ),
+            conn,
+        )
+    if df.empty:
+        return None
+    dates = pd.to_datetime(df["application_date"])
+    train_end = dates.quantile(0.70)
+    val_end = dates.quantile(0.85)
+    return (
+        pd.Timestamp(train_end).strftime("%Y-%m-%d"),
+        pd.Timestamp(val_end).strftime("%Y-%m-%d"),
+    )
+
+
 def prepare_time_split(
     engine: Engine,
     train_end: str = TrainingConfig.TRAIN_END_DATE,
@@ -25,6 +51,19 @@ def prepare_time_split(
 ) -> dict:
     """Time-based split summary — no random split."""
     train, val, test = get_feature_dataset(engine, train_end, val_end)
+
+    if (
+        TrainingConfig.AUTO_DATE_SPLIT
+        and (train.empty or val.empty)
+    ):
+        cuts = _auto_date_cuts(engine)
+        if cuts:
+            train_end, val_end = cuts
+            logger.warning(
+                f"Empty split with configured dates — auto using "
+                f"train_end={train_end}, val_end={val_end}"
+            )
+            train, val, test = get_feature_dataset(engine, train_end, val_end)
 
     def _rate(frame: pd.DataFrame) -> float | None:
         if frame.empty or TrainingConfig.TARGET_COL not in frame.columns:
@@ -35,6 +74,8 @@ def prepare_time_split(
         "train_size": len(train),
         "val_size": len(val),
         "test_size": len(test),
+        "train_end": train_end,
+        "val_end": val_end,
         "target_rate_train": _rate(train),
         "target_rate_val": _rate(val),
         "target_rate_test": _rate(test),
@@ -49,7 +90,8 @@ def prepare_time_split(
     }
     logger.info(
         f"Split: train={info['train_size']}, "
-        f"val={info['val_size']}, test={info['test_size']}"
+        f"val={info['val_size']}, test={info['test_size']} "
+        f"(train_end={train_end}, val_end={val_end})"
     )
     return info
 
@@ -190,9 +232,16 @@ def train_model(
     from src.models.scoring.evaluate import compute_metrics
 
     train, val, test = get_feature_dataset(engine, train_end, val_end)
+    if TrainingConfig.AUTO_DATE_SPLIT and (train.empty or val.empty):
+        cuts = _auto_date_cuts(engine)
+        if cuts:
+            train_end, val_end = cuts
+            train, val, test = get_feature_dataset(engine, train_end, val_end)
     if train.empty or val.empty:
         raise ValueError(
-            f"Insufficient data for training: train={len(train)}, val={len(val)}"
+            f"Insufficient data for training: train={len(train)}, val={len(val)}. "
+            "Set TRAIN_END_DATE/VAL_END_DATE to match your data "
+            "(see scripts/prepare_lending_club.py)."
         )
 
     X_train, feature_cols = get_feature_matrix(train)
@@ -238,6 +287,13 @@ def load_training_frames(
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str], dict]:
     """Load once for hyperopt loops."""
     train, val, test = get_feature_dataset(engine, train_end, val_end)
+    if TrainingConfig.AUTO_DATE_SPLIT and (train.empty or val.empty):
+        cuts = _auto_date_cuts(engine)
+        if cuts:
+            train_end, val_end = cuts
+            train, val, test = get_feature_dataset(engine, train_end, val_end)
+    if train.empty:
+        raise ValueError("Empty training set after date split")
     X_train, feature_cols = get_feature_matrix(train)
     medians = X_train.median(numeric_only=True).to_dict()
     return train, val, test, feature_cols, medians

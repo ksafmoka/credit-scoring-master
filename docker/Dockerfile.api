@@ -2,6 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Slow / flaky networks (WSL, VPN, Docker Desktop)
+ENV PIP_DEFAULT_TIMEOUT=300 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_RETRIES=10 \
+    PIP_ROOT_USER_ACTION=ignore
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -11,7 +17,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements/requirements-api.txt /tmp/requirements-api.txt
-RUN pip install --no-cache-dir -r /tmp/requirements-api.txt
+
+# Prefer binary wheels; longer timeout; retries on read timeout
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir --prefer-binary \
+       --default-timeout=300 \
+       --retries=10 \
+       -r /tmp/requirements-api.txt
 
 COPY src/ /app/src/
 COPY configs/ /app/configs/

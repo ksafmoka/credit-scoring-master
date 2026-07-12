@@ -1,4 +1,6 @@
--- Create roles and databases (runs as postgres superuser on first boot)
+-- Runs once on empty Postgres volume (as superuser `postgres`).
+-- Creates app roles, databases, schemas owned by ml_user.
+
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ml_user') THEN
@@ -19,6 +21,10 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow')\gexec
 SELECT 'CREATE DATABASE mlflow OWNER postgres'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mlflow')\gexec
 
+GRANT ALL PRIVILEGES ON DATABASE credit_scoring TO ml_user;
+GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
+GRANT ALL PRIVILEGES ON DATABASE mlflow TO postgres;
+
 \c credit_scoring
 
 CREATE SCHEMA IF NOT EXISTS raw AUTHORIZATION ml_user;
@@ -27,34 +33,6 @@ CREATE SCHEMA IF NOT EXISTS models AUTHORIZATION ml_user;
 CREATE SCHEMA IF NOT EXISTS predictions AUTHORIZATION ml_user;
 CREATE SCHEMA IF NOT EXISTS monitoring AUTHORIZATION ml_user;
 
-GRANT ALL PRIVILEGES ON SCHEMA raw TO ml_user;
-GRANT ALL PRIVILEGES ON SCHEMA features TO ml_user;
-GRANT ALL PRIVILEGES ON SCHEMA models TO ml_user;
-GRANT ALL PRIVILEGES ON SCHEMA predictions TO ml_user;
-GRANT ALL PRIVILEGES ON SCHEMA monitoring TO ml_user;
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA raw
-    GRANT ALL ON TABLES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA features
-    GRANT ALL ON TABLES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA models
-    GRANT ALL ON TABLES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA predictions
-    GRANT ALL ON TABLES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA monitoring
-    GRANT ALL ON TABLES TO ml_user;
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA raw
-    GRANT ALL ON SEQUENCES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA features
-    GRANT ALL ON SEQUENCES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA predictions
-    GRANT ALL ON SEQUENCES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA monitoring
-    GRANT ALL ON SEQUENCES TO ml_user;
-
-
--- Ensure airflow role can use its database
-GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
-GRANT ALL PRIVILEGES ON DATABASE credit_scoring TO ml_user;
-GRANT ALL PRIVILEGES ON DATABASE mlflow TO postgres;
+-- Allow ml_user full control inside its schemas
+GRANT ALL ON SCHEMA raw, features, models, predictions, monitoring TO ml_user;
+ALTER ROLE ml_user SET search_path TO raw, features, predictions, monitoring, public;

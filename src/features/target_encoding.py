@@ -88,7 +88,7 @@ class RegularizedTargetEncoder:
         self,
         engine: Engine,
         train_cutoff: str,
-        execution_date: str,
+        execution_date: str | None = None,
     ) -> pd.DataFrame:
         cols_sql = ", ".join(f"a.{c}" for c in self.cols)
         with engine.connect() as conn:
@@ -108,6 +108,25 @@ class RegularizedTargetEncoder:
             )
 
         if train_df.empty:
+            # LC dates may all be before/after configured cutoff — fit on all labeled rows
+            logger.warning(
+                f"Empty TE train for cutoff={train_cutoff}; fitting on ALL labeled apps"
+            )
+            with engine.connect() as conn:
+                train_df = pd.read_sql(
+                    text(
+                        f"""
+                        SELECT {cols_sql},
+                               a.is_default,
+                               a.application_id
+                        FROM raw.applications a
+                        WHERE a.is_default IS NOT NULL
+                        """
+                    ),
+                    conn,
+                )
+
+        if train_df.empty:
             logger.warning("Empty train set for target encoding; using prior 0.15")
             self.global_mean = 0.15
             self.encoding_map = {c: {} for c in self.cols}
@@ -115,20 +134,31 @@ class RegularizedTargetEncoder:
             train_df[self.target_col] = train_df[self.target_col].astype(float)
             self.fit(train_df)
 
+        # Transform full population (no Airflow-ds filter)
         with engine.connect() as conn:
-            all_df = pd.read_sql(
-                text(
-                    f"""
-                    SELECT application_id, {', '.join(self.cols)}
-                    FROM raw.applications
-                    WHERE application_date <= :execution_date
-                    """
-                ),
-                conn,
-                params={"execution_date": execution_date},
-            )
+            if execution_date:
+                all_df = pd.read_sql(
+                    text(
+                        f"""
+                        SELECT application_id, {', '.join(self.cols)}
+                        FROM raw.applications
+                        WHERE application_date <= :execution_date
+                        """
+                    ),
+                    conn,
+                    params={"execution_date": execution_date},
+                )
+            else:
+                all_df = pd.read_sql(
+                    text(
+                        f"""
+                        SELECT application_id, {', '.join(self.cols)}
+                        FROM raw.applications
+                        """
+                    ),
+                    conn,
+                )
 
-        # No noise on full population transform (serving parity)
         return self.transform(all_df, apply_noise=False)
 
     def to_dict(self) -> dict:

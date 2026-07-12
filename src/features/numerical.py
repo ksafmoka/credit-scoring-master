@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+
 from src.logging_utils import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -28,7 +30,6 @@ class NumericalFeatureComputer:
             df.get("employment_years"), errors="coerce"
         ).fillna(0.0)
         credit = pd.to_numeric(df.get("credit_score"), errors="coerce")
-        # Normalize FICO-like scores to ~[0, 1]
         result["credit_score_norm"] = ((credit - 300.0) / 550.0).clip(0, 1)
         result["num_open_accounts"] = pd.to_numeric(
             df.get("num_open_accounts"), errors="coerce"
@@ -42,10 +43,14 @@ class NumericalFeatureComputer:
 
         loan_amount = pd.to_numeric(df["loan_amount"], errors="coerce")
         income = pd.to_numeric(df["income"], errors="coerce")
-        result["loan_amount_x_dti"] = loan_amount * dti.fillna(0)
-        result["income_x_credit_score"] = income * credit.fillna(0)
+        # Keep cross-features in a safe float range for storage / stability
+        result["loan_amount_x_dti"] = (loan_amount * dti.fillna(0)).clip(
+            -1e12, 1e12
+        )
+        result["income_x_credit_score"] = (income * credit.fillna(0)).clip(
+            -1e12, 1e12
+        )
 
-        # Optional descriptive buckets (not in model feature list)
         result["dti_bucket"] = self._dti_bucket(dti)
         result["credit_score_bucket"] = self._credit_score_bucket(credit)
 
