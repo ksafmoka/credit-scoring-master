@@ -1,32 +1,32 @@
-# requirements/requirements-airflow.txt
+# Extra packages ONLY (no apache-airflow, no sqlalchemy pins).
+# Provider is installed separately in Dockerfile.airflow with Airflow constraints.
+# Base image: apache/airflow:2.8.1-python3.11 already includes Airflow + alembic.
 
-apache-airflow==2.8.1
-apache-airflow-providers-postgres==5.10.0
-
-# ML
+# ML (training DAGs)
 catboost==1.2.3
 lightgbm==4.3.0
 xgboost==2.0.3
 scikit-learn==1.4.0
-scikit-uplift==0.5.1
-optuna==3.5.0
+optuna==3.6.1
 
-# Data
-pandas==2.2.0
-numpy==1.26.4
-scipy==1.12.0
+# Data (flexible to avoid fighting base image pins)
+pandas>=2.0,<2.3
+numpy>=1.24,<1.27
+scipy>=1.10,<1.13
 
-# MLflow
-mlflow==2.10.0
+# MLflow tracking client (server is a separate container)
+mlflow==2.14.3
 psycopg2-binary==2.9.9
+sqlalchemy==2.0.25
 
 # Explainability
 shap==0.44.1
 
-# Validation
-pandera==0.18.3
-
 # Utils
 python-dotenv==1.0.1
-pyyaml==6.0.1
+pyyaml>=6.0.1
 loguru==0.7.2
+requests==2.31.0
+
+# Tests inside container
+pytest==8.0.0

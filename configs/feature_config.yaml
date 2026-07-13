@@ -1,4 +1,4 @@
-# configs/feature_config.yaml
+# Feature engineering configuration
 
 version: "v1.0"
 
@@ -13,7 +13,8 @@ target_encoding:
     - purpose
   smoothing: 20
   min_samples: 10
-  noise_level: 0.01
+  # Noise only during experimental train-side TE; production path uses 0
+  noise_level: 0.0
 
 numerical_clip:
   dti_ratio:
@@ -24,3 +25,28 @@ critical_features_no_null:
   - loan_to_income
   - credit_utilization
   - income_log
+
+model_features:
+  - loan_to_income
+  - credit_utilization
+  - income_log
+  - loan_amount_log
+  - dti_ratio_clipped
+  - employment_years
+  - credit_score_norm
+  - num_open_accounts
+  - num_delinquencies
+  - interest_rate
+  - loan_amount_x_dti
+  - income_x_credit_score
+  - purpose_target_enc
+  - home_ownership_target_enc
+  - avg_days_overdue_30d
+  - avg_days_overdue_90d
+  - avg_days_overdue_180d
+  - max_days_overdue_90d
+  - pct_late_payments_90d
+  - total_paid_90d
+  - payment_consistency_90d
+  - bureau_balance_to_income
+  - inquiries_per_account

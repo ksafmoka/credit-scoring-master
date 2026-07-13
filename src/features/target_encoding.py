@@ -1,18 +1,24 @@
-# src/features/target_encoding.py
+"""Regularized target encoding with train-only noise and serializable maps."""
 
-import pandas as pd
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
 import numpy as np
-from loguru import logger
+import pandas as pd
+from src.logging_utils import get_logger
+logger = get_logger(__name__)
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 
 class RegularizedTargetEncoder:
     """
-    Target encoding с регуляризацией для предотвращения overfitting.
-    Используется только на train-периоде, применяется на всём датасете.
+    target_enc = (category_mean * n + global_mean * smoothing) / (n + smoothing)
 
-    target_enc = (category_mean * n + global_mean * smoothing)
-                 / (n + smoothing)
+    Noise is applied only when apply_noise=True (training fit path).
+    Encoding maps are serializable for online serving parity.
     """
 
     def __init__(
@@ -22,62 +28,59 @@ class RegularizedTargetEncoder:
         smoothing: int = 20,
         min_samples: int = 10,
         noise_level: float = 0.01,
+        random_seed: int = 42,
     ):
         self.cols = cols
         self.target_col = target_col
         self.smoothing = smoothing
         self.min_samples = min_samples
         self.noise_level = noise_level
-        self.encoding_map: dict = {}
+        self.random_seed = random_seed
+        self.encoding_map: dict[str, dict] = {}
         self.global_mean: float = 0.0
 
-    def fit(
-        self,
-        df: pd.DataFrame,
-    ) -> "RegularizedTargetEncoder":
-        """Fit только на train данных."""
-        self.global_mean = df[self.target_col].mean()
+    def fit(self, df: pd.DataFrame) -> "RegularizedTargetEncoder":
+        self.global_mean = float(df[self.target_col].astype(float).mean())
 
         for col in self.cols:
-            stats = df.groupby(col)[self.target_col].agg(
-                ["mean", "count"]
+            stats = (
+                df.groupby(col)[self.target_col]
+                .agg(["mean", "count"])
+                .astype({"mean": float, "count": float})
             )
             stats["encoded"] = (
                 stats["mean"] * stats["count"]
                 + self.global_mean * self.smoothing
             ) / (stats["count"] + self.smoothing)
-
-            # категории с малым числом примеров → global_mean
-            stats.loc[
-                stats["count"] < self.min_samples, "encoded"
-            ] = self.global_mean
-
-            self.encoding_map[col] = stats["encoded"].to_dict()
+            stats.loc[stats["count"] < self.min_samples, "encoded"] = (
+                self.global_mean
+            )
+            self.encoding_map[col] = {
+                str(k): float(v) for k, v in stats["encoded"].to_dict().items()
+            }
             logger.info(
                 f"Target encoding fitted for {col}: "
                 f"{len(self.encoding_map[col])} categories"
             )
-
         return self
 
-    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Transform на любом датасете."""
+    def transform(
+        self,
+        df: pd.DataFrame,
+        apply_noise: bool = False,
+    ) -> pd.DataFrame:
         result = df.copy()
+        rng = np.random.default_rng(self.random_seed)
 
         for col in self.cols:
             encoded_col = f"{col}_target_enc"
+            mapping = self.encoding_map.get(col, {})
             result[encoded_col] = (
-                result[col]
-                .map(self.encoding_map[col])
-                .fillna(self.global_mean)
+                result[col].astype(str).map(mapping).fillna(self.global_mean)
             )
-
-            # добавляем шум только на train (для regularization)
-            if self.noise_level > 0:
-                noise = np.random.normal(
-                    0, self.noise_level, size=len(result)
-                )
-                result[encoded_col] += noise
+            if apply_noise and self.noise_level > 0:
+                noise = rng.normal(0.0, self.noise_level, size=len(result))
+                result[encoded_col] = result[encoded_col] + noise
 
         return result
 
@@ -85,33 +88,109 @@ class RegularizedTargetEncoder:
         self,
         engine: Engine,
         train_cutoff: str,
-        execution_date: str,
+        execution_date: str | None = None,
     ) -> pd.DataFrame:
-
+        cols_sql = ", ".join(f"a.{c}" for c in self.cols)
         with engine.connect() as conn:
             train_df = pd.read_sql(
-                f"""
-                SELECT a.{', a.'.join(self.cols)},
-                    a.is_default,
-                    a.application_id
-                FROM raw.applications a
-                WHERE a.application_date <= '{train_cutoff}'
-                AND a.is_default IS NOT NULL
-                """,
+                text(
+                    f"""
+                    SELECT {cols_sql},
+                           a.is_default,
+                           a.application_id
+                    FROM raw.applications a
+                    WHERE a.application_date <= :train_cutoff
+                      AND a.is_default IS NOT NULL
+                    """
+                ),
                 conn,
+                params={"train_cutoff": train_cutoff},
             )
 
-        self.fit(train_df)
+        if train_df.empty:
+            # LC dates may all be before/after configured cutoff — fit on all labeled rows
+            logger.warning(
+                f"Empty TE train for cutoff={train_cutoff}; fitting on ALL labeled apps"
+            )
+            with engine.connect() as conn:
+                train_df = pd.read_sql(
+                    text(
+                        f"""
+                        SELECT {cols_sql},
+                               a.is_default,
+                               a.application_id
+                        FROM raw.applications a
+                        WHERE a.is_default IS NOT NULL
+                        """
+                    ),
+                    conn,
+                )
 
+        if train_df.empty:
+            logger.warning("Empty train set for target encoding; using prior 0.15")
+            self.global_mean = 0.15
+            self.encoding_map = {c: {} for c in self.cols}
+        else:
+            train_df[self.target_col] = train_df[self.target_col].astype(float)
+            self.fit(train_df)
+
+        # Transform full population (no Airflow-ds filter)
         with engine.connect() as conn:
-            all_df = pd.read_sql(
-                f"""
-                SELECT application_id,
-                    {', '.join(self.cols)}
-                FROM raw.applications
-                WHERE application_date <= '{execution_date}'
-                """,
-                conn,
-            )
+            if execution_date:
+                all_df = pd.read_sql(
+                    text(
+                        f"""
+                        SELECT application_id, {', '.join(self.cols)}
+                        FROM raw.applications
+                        WHERE application_date <= :execution_date
+                        """
+                    ),
+                    conn,
+                    params={"execution_date": execution_date},
+                )
+            else:
+                all_df = pd.read_sql(
+                    text(
+                        f"""
+                        SELECT application_id, {', '.join(self.cols)}
+                        FROM raw.applications
+                        """
+                    ),
+                    conn,
+                )
 
-        return self.transform(all_df)
+        return self.transform(all_df, apply_noise=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "cols": self.cols,
+            "target_col": self.target_col,
+            "smoothing": self.smoothing,
+            "min_samples": self.min_samples,
+            "noise_level": self.noise_level,
+            "global_mean": self.global_mean,
+            "encoding_map": self.encoding_map,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict) -> "RegularizedTargetEncoder":
+        enc = cls(
+            cols=payload["cols"],
+            target_col=payload.get("target_col", "is_default"),
+            smoothing=int(payload.get("smoothing", 20)),
+            min_samples=int(payload.get("min_samples", 10)),
+            noise_level=float(payload.get("noise_level", 0.0)),
+        )
+        enc.global_mean = float(payload.get("global_mean", 0.15))
+        enc.encoding_map = payload.get("encoding_map", {})
+        return enc
+
+    def save(self, path: str | Path) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.to_dict(), indent=2))
+
+    @classmethod
+    def load(cls, path: str | Path) -> "RegularizedTargetEncoder":
+        payload = json.loads(Path(path).read_text())
+        return cls.from_dict(payload)

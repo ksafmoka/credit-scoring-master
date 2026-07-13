@@ -1,43 +1,63 @@
-version: '3.8'
-
 x-airflow-common: &airflow-common
   build:
     context: .
     dockerfile: docker/Dockerfile.airflow
+  # Help containers reach public HTTPS (Telegram, PyPI) on some WSL/Docker Desktop setups
+  dns:
+    - 8.8.8.8
+    - 1.1.1.1
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
-    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
     AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+    AIRFLOW__WEBSERVER__SECRET_KEY: credit_scoring_airflow_secret_key_change_me
+    AIRFLOW__CORE__FERNET_KEY: "dGVzdF9mZXJuZXRfa2V5X2Zvcl9sb2NhbF9kZW1vX29ubHk="
     MLFLOW_TRACKING_URI: http://mlflow:5000
+    # Same path in Airflow + MLflow containers (shared volume)
+    MLFLOW_ARTIFACT_ROOT: /mlflow/artifacts
+    # Silence noisy git warning from mlflow
+    GIT_PYTHON_REFRESH: quiet
     PYTHONPATH: /opt/airflow
-    # App DB
     APP_DB_HOST: postgres
     APP_DB_PORT: 5432
     APP_DB_NAME: credit_scoring
     APP_DB_USER: ml_user
     APP_DB_PASSWORD: ml_password
-
-    LENDING_CLUB_CSV_PATH: /opt/airflow/data/lending_club.csv
-
+    # Resolved in code: prefers lending_club.csv if file exists under /opt/airflow/data
+    LENDING_CLUB_CSV_PATH: ${LENDING_CLUB_CSV_PATH:-/opt/airflow/data/lending_club.csv}
+    TRAIN_END_DATE: ${TRAIN_END_DATE:-2022-12-31}
+    VAL_END_DATE: ${VAL_END_DATE:-2023-06-30}
+    AUTO_DATE_SPLIT: ${AUTO_DATE_SPLIT:-true}
+    N_OPTUNA_TRIALS: ${N_OPTUNA_TRIALS:-10}
+    # Optional Telegram (often blocked from Docker; monitoring works without it)
+    TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    _AIRFLOW_WWW_USER_USERNAME: admin
+    _AIRFLOW_WWW_USER_PASSWORD: admin
+    _AIRFLOW_WWW_USER_EMAIL: admin@example.com
+  # Values also come from host `.env` via ${TELEGRAM_*} interpolation above.
+  # Optionally inject full .env into containers:
+  # env_file: [.env]
   volumes:
     - ./dags:/opt/airflow/dags
     - ./src:/opt/airflow/src
     - ./configs:/opt/airflow/configs
     - ./tests:/opt/airflow/tests
-    - ./logs/airflow:/opt/airflow/logs
+    - ./scripts:/opt/airflow/scripts
+    - ./docker/airflow-init.sh:/opt/airflow/airflow-init.sh:ro
+    - airflow_logs:/opt/airflow/logs
     - ./artifacts:/opt/airflow/artifacts
+    # Shared MLflow artifact store (must match MLflow service mount)
+    - ./mlflow_artifacts:/mlflow/artifacts
     - ./data:/opt/airflow/data
   depends_on:
     postgres:
       condition: service_healthy
+  user: "50000:0"
 
 services:
-
-  # ─────────────────────────────────────────
-  # PostgreSQL
-  # ─────────────────────────────────────────
   postgres:
     image: postgres:15
     environment:
@@ -52,25 +72,12 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  # ─────────────────────────────────────────
-  # Airflow
-  # ─────────────────────────────────────────
   airflow-init:
     <<: *airflow-common
-    entrypoint: /bin/bash
-    command: >
-      -c "
-        airflow db init &&
-        airflow users create
-          --username admin
-          --password admin
-          --firstname Admin
-          --lastname Admin
-          --role Admin
-          --email admin@admin.com || true
-      "
+    entrypoint: ["/bin/bash", "/opt/airflow/airflow-init.sh"]
+    command: []
     restart: "no"
 
   airflow-webserver:
@@ -79,31 +86,44 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
 
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
     restart: unless-stopped
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
 
-  # ─────────────────────────────────────────
-  # MLflow
-  # ─────────────────────────────────────────
   mlflow:
     build:
       context: .
       dockerfile: docker/Dockerfile.mlflow
     ports:
       - "5000:5000"
+    environment:
+      MLFLOW_ARTIFACT_ROOT: /mlflow/artifacts
     volumes:
-      - mlflow_artifacts:/mlflow/artifacts
+      - ./mlflow_artifacts:/mlflow/artifacts
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    user: "0:0"
 
-  # ─────────────────────────────────────────
-  # FastAPI
-  # ─────────────────────────────────────────
   api:
     build:
       context: .
@@ -117,28 +137,32 @@ services:
       APP_DB_NAME: credit_scoring
       APP_DB_USER: ml_user
       APP_DB_PASSWORD: ml_password
+    volumes:
+      - ./src:/app/src
+      - ./configs:/app/configs
+      - ./artifacts:/app/artifacts
+      - ./mlflow_artifacts:/mlflow/artifacts
     depends_on:
       - mlflow
       - postgres
     restart: unless-stopped
 
-  # ─────────────────────────────────────────
-  # Grafana
-  # ─────────────────────────────────────────
   grafana:
     image: grafana/grafana:10.2.0
     ports:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - postgres
     restart: unless-stopped
 
 volumes:
   postgres_data:
-  mlflow_artifacts:
   grafana_data:
+  airflow_logs:

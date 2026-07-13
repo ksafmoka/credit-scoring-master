@@ -1,37 +1,58 @@
-# Feature Documentation
+# Feature documentation
 
-## Feature Groups
+## Feature groups
 
-### Numerical (src/features/numerical.py)
-| Feature | Formula | Source |
-|---------|---------|--------|
-| loan_to_income | loan_amount / income | raw.applications |
-| credit_utilization | loan_amount / total_credit_limit | raw.applications |
-| income_log | log1p(income) | raw.applications |
-| loan_amount_log | log1p(loan_amount) | raw.applications |
-| dti_ratio_clipped | clip(dti_ratio, 0, 100) | raw.applications |
+### Numerical & cross (`src/features/numerical.py`)
 
-### Aggregation (src/features/aggregations.py)
-| Feature | Window | Source |
-|---------|--------|--------|
-| avg_days_overdue_{W}d | 30/90/180 | raw.payment_history |
-| max_days_overdue_90d | 90 | raw.payment_history |
-| pct_late_payments_90d | 90 | raw.payment_history |
-| total_paid_90d | 90 | raw.payment_history |
+| Feature | Formula / source |
+|---------|------------------|
+| `loan_to_income` | `loan_amount / income` |
+| `credit_utilization` | `loan_amount / total_credit_limit` |
+| `income_log` | `log1p(income)` |
+| `loan_amount_log` | `log1p(loan_amount)` |
+| `dti_ratio_clipped` | `clip(dti_ratio, 0, 100)` |
+| `employment_years` | employment tenure |
+| `credit_score_norm` | `(credit_score - 300) / 550` clipped to [0, 1] |
+| `num_open_accounts` | open trade lines |
+| `num_delinquencies` | delinquency count |
+| `interest_rate` | loan APR |
+| `loan_amount_x_dti` | product cross |
+| `income_x_credit_score` | product cross |
 
-### Target Encoded (src/features/target_encoding.py)
-| Feature | Smoothing |
-|---------|-----------|
-| purpose_target_enc | 20 |
-| home_ownership_target_enc | 20 |
+### Aggregation (`src/features/aggregations.py`)
 
-### Cross Features
+Only payments with `payment_date < application_date`.
+
+| Feature | Window |
+|---------|--------|
+| `avg_days_overdue_{30,90,180}d` | mean overdue days |
+| `max_days_overdue_90d` | max overdue |
+| `pct_late_payments_90d` | share of late payments |
+| `total_paid_90d` | sum paid |
+| `payment_consistency_90d` | `1 - std(days_overdue)/90` clipped |
+
+### Target encoding (`src/features/target_encoding.py`)
+
+| Feature | Notes |
+|---------|-------|
+| `purpose_target_enc` | fit on train period only, smoothing=20 |
+| `home_ownership_target_enc` | same |
+
+Maps are persisted to `artifacts/target_encoding.json` for online parity.  
+**No noise** on inference transforms.
+
+### Bureau (`src/features/bureau.py`)
+
+Latest bureau report **before** application date:
+
 | Feature | Formula |
 |---------|---------|
-| loan_amount_x_dti | loan_amount × dti_ratio |
-| income_x_credit_score | income × credit_score |
+| `bureau_balance_to_income` | `total_balance / income` |
+| `inquiries_per_account` | `num_inquiries_6m / num_active_loans` |
 
-## Leakage Protection
-- All aggregation features use ONLY payments BEFORE application_date
-- Target encoding fitted ONLY on train period (≤ 2022-12-31)
-- Post-origination columns excluded (see tests/test_leakage.py)
+## Leakage protection
+
+- Aggregates & bureau use only pre-application events
+- Target encoding fitted on train cutoff (`≤ 2022-12-31`)
+- Time-based train/val/test split
+- Leakage DAG checks: train/test ID overlap + future payments

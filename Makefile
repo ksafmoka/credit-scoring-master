@@ -1,33 +1,48 @@
-.PHONY: up down restart logs shell-airflow shell-postgres init-db
+.PHONY: up down down-v rebuild restart-code airflow-admin sample-data local-pipeline test smoke prepare-lc telegram-once telegram-loop
 
+# Start using EXISTING images (no rebuild) — preferred when only src/dags changed
 up:
-	docker-compose up -d
+	docker compose up -d
+
+# Full rebuild (needs stable PyPI network; can take long)
+rebuild:
+	docker compose build --no-cache
+	docker compose up -d
+
+# Recreate containers without rebuilding images (pick up compose/env)
+restart-code:
+	docker compose up -d --force-recreate
 
 down:
-	docker-compose down
+	docker compose down
 
-restart:
-	docker-compose down && docker-compose up -d
+down-v:
+	docker compose down -v
 
-logs:
-	docker-compose logs -f
+airflow-admin:
+	docker compose run --rm --entrypoint /bin/bash airflow-init /opt/airflow/airflow-init.sh
 
-shell-airflow:
-	docker-compose exec airflow-scheduler bash
+sample-data:
+	python scripts/generate_sample_data.py --n 5000
 
-shell-postgres:
-	docker-compose exec postgres psql -U postgres
+# Feature-drift Telegram delivery from HOST (Docker cannot reach Telegram)
+telegram-once:
+	PYTHONPATH=. python scripts/telegram_notifier.py --once
 
-init-db:
-	docker-compose exec postgres psql -U postgres -f /docker-entrypoint-initdb.d/01_init_schema.sql
+telegram-loop:
+	PYTHONPATH=. python scripts/telegram_notifier.py --loop --interval 30
+
+# make prepare-lc INPUT=/path/to/accepted.csv MAX_ROWS=200000
+prepare-lc:
+	PYTHONPATH=. python scripts/prepare_lending_club.py --input "$(INPUT)" --max-rows $(or $(MAX_ROWS),200000)
+
+local-pipeline:
+	PYTHONPATH=. python scripts/run_local_pipeline.py
 
 test:
-	docker-compose exec airflow-scheduler pytest /opt/airflow/tests/ -v
+	PYTHONPATH=. pytest tests/ -v
 
-format:
-	black src/ dags/ tests/
-	isort src/ dags/ tests/
-
-lint:
-	flake8 src/ dags/ tests/
-	mypy src/
+smoke:
+	PYTHONPATH=. python scripts/generate_sample_data.py --n 3000
+	PYTHONPATH=. python scripts/run_local_pipeline.py
+	PYTHONPATH=. pytest tests/ -q

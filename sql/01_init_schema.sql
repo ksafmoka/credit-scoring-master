@@ -1,13 +1,31 @@
--- sql/01_init_schema.sql
+-- Runs once on empty Postgres volume (as superuser `postgres`).
+-- Creates app roles, databases, schemas owned by ml_user.
 
-CREATE USER ml_user WITH PASSWORD 'ml_password';
-CREATE USER airflow WITH PASSWORD 'airflow';
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ml_user') THEN
+        CREATE USER ml_user WITH PASSWORD 'ml_password';
+    END IF;
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'airflow') THEN
+        CREATE USER airflow WITH PASSWORD 'airflow';
+    END IF;
+END
+$$;
 
-CREATE DATABASE credit_scoring OWNER ml_user;
-CREATE DATABASE airflow OWNER airflow;
-CREATE DATABASE mlflow OWNER postgres;
+SELECT 'CREATE DATABASE credit_scoring OWNER ml_user'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'credit_scoring')\gexec
 
-\c credit_scoring;
+SELECT 'CREATE DATABASE airflow OWNER airflow'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow')\gexec
+
+SELECT 'CREATE DATABASE mlflow OWNER postgres'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mlflow')\gexec
+
+GRANT ALL PRIVILEGES ON DATABASE credit_scoring TO ml_user;
+GRANT ALL PRIVILEGES ON DATABASE airflow TO airflow;
+GRANT ALL PRIVILEGES ON DATABASE mlflow TO postgres;
+
+\c credit_scoring
 
 CREATE SCHEMA IF NOT EXISTS raw AUTHORIZATION ml_user;
 CREATE SCHEMA IF NOT EXISTS features AUTHORIZATION ml_user;
@@ -15,38 +33,5 @@ CREATE SCHEMA IF NOT EXISTS models AUTHORIZATION ml_user;
 CREATE SCHEMA IF NOT EXISTS predictions AUTHORIZATION ml_user;
 CREATE SCHEMA IF NOT EXISTS monitoring AUTHORIZATION ml_user;
 
--- Права на существующие объекты
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA raw TO ml_user;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA features TO ml_user;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA models TO ml_user;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA predictions TO ml_user;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA monitoring TO ml_user;
-
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA raw TO ml_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA features TO ml_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA models TO ml_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA predictions TO ml_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA monitoring TO ml_user;
-
--- КЛЮЧЕВОЕ: права на БУДУЩИЕ объекты
-ALTER DEFAULT PRIVILEGES IN SCHEMA raw
-    GRANT ALL PRIVILEGES ON TABLES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA features
-    GRANT ALL PRIVILEGES ON TABLES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA models
-    GRANT ALL PRIVILEGES ON TABLES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA predictions
-    GRANT ALL PRIVILEGES ON TABLES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA monitoring
-    GRANT ALL PRIVILEGES ON TABLES TO ml_user;
-
-ALTER DEFAULT PRIVILEGES IN SCHEMA raw
-    GRANT ALL PRIVILEGES ON SEQUENCES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA features
-    GRANT ALL PRIVILEGES ON SEQUENCES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA models
-    GRANT ALL PRIVILEGES ON SEQUENCES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA predictions
-    GRANT ALL PRIVILEGES ON SEQUENCES TO ml_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA monitoring
-    GRANT ALL PRIVILEGES ON SEQUENCES TO ml_user;
+GRANT ALL ON SCHEMA raw, features, models, predictions, monitoring TO ml_user;
+ALTER ROLE ml_user SET search_path TO raw, features, predictions, monitoring, public;

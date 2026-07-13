@@ -1,83 +1,87 @@
-# Credit Scoring System
+# Credit Scoring System (PD)
 
-## Overview
-End-to-end ML system for credit default prediction (PD scoring)
-with Airflow orchestration, MLflow experiment tracking,
-FastAPI serving, and Grafana monitoring.
+End-to-end ML system for **probability of default (PD)** scoring:
 
-## Architecture
-```text
-Lending Club CSV
-    → PostgreSQL (raw schema)
-    → Feature Engineering (Airflow DAG)
-    → Model Training: CatBoost / LightGBM / XGBoost + Stacking (Airflow DAG)
-    → MLflow Model Registry
-    → FastAPI Scoring API
-    → Grafana Monitoring Dashboard
-    
-# Stack
-Orchestration: Apache Airflow 2.8
-Experiment Tracking: MLflow 2.10
-Database: PostgreSQL 15
-Serving: FastAPI + Uvicorn
-Monitoring: Grafana + custom PSI/KS drift checks
-Models: CatBoost, LightGBM, XGBoost, Stacking Ensemble
-Hyperparameter Tuning: Optuna
-Explainability: SHAP
-# Quick Start
+CSV → PostgreSQL → Airflow feature engineering → CatBoost / LightGBM / XGBoost + stacking → MLflow → FastAPI → Grafana
 
-# 1. Start all services
-make up
+> Scope: **default prediction**
 
-# 2. Wait for postgres healthcheck, then init DB schemas
-make init-db
+## Data
 
-# 3. Access services
-# Airflow:  http://localhost:8080  (admin/admin)
-# MLflow:   http://localhost:5000
-# API:      http://localhost:8000/docs
-# Grafana:  http://localhost:3000  (admin/admin)
+- Prefer `data/lending_club.csv` (auto-selected if present).
+- Fallback: `data/sample_applications.csv`.
 
-# 4. Trigger data ingestion DAG from Airflow UI
-# 5. Trigger feature engineering DAG
-# 6. Trigger model training DAG
+```bash
+# optional sample
+python scripts/generate_sample_data.py --n 5000
+```
 
-Pipelines
-DAG	Schedule	Description
-data_ingestion	@daily	Load raw data, generate payment history, validate
-feature_engineering	@daily	Compute numerical, aggregation, target-encoded features
-model_training	manual trigger	Train 3 models + ensemble, hyperopt, leakage check, register
-monitoring	@daily	Feature drift (PSI/KS), prediction distribution checks
+## Quick start (local, no Docker)
 
-Tests
-make test
+**Python 3.10 / 3.11 / 3.12 only** (not 3.13/3.14).
 
-Data
-Source: Lending Club (Kaggle)
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -U pip setuptools wheel
+pip install -r requirements/requirements-local.txt
+export PYTHONPATH=.                # PowerShell: $env:PYTHONPATH="."
+python scripts/generate_sample_data.py --n 3000
+python scripts/run_local_pipeline.py
+pytest tests/ -q
+```
 
-Target: is_default — binary flag based on loan_status ∈ {Charged Off, Default, Late (31-120 days)}
+Artifacts appear in `artifacts/`.
 
-Split: time-based. Train ≤ 2022-12-31, Val ≤ 2023-06-30, Test > 2023-06-30.
+## Notebooks
 
----
+1. `notebooks/01_EDA.ipynb`
+2. `notebooks/02_Model_experiments.ipynb` — first cell `%pip install ...`
+3. `notebooks/03_SHAP_analysis.ipynb`
 
-## 2. `.env.example`
+## Docker
 
-```env
-# .env.example
+```bash
+cp .env.example .env
+docker compose up -d
+# If images are missing and PyPI is stable: make rebuild
 
-LENDING_CLUB_CSV_PATH=/opt/airflow/data/lending_club.csv
+# Airflow http://localhost:8080  (admin/admin)
+# MLflow  http://localhost:5000
+# API     http://localhost:8000/docs
+# Grafana http://localhost:3000  (admin/admin)
+```
 
-# PostgreSQL (application database)
-APP_DB_HOST=postgres
-APP_DB_PORT=5432
-APP_DB_NAME=credit_scoring
-APP_DB_USER=ml_user
-APP_DB_PASSWORD=ml_password
+Run DAGs in order: `data_ingestion` → `feature_engineering` → `model_training` → `batch_prediction`.
 
-# MLflow
-MLFLOW_TRACKING_URI=http://mlflow:5000
+```bash
+docker compose exec airflow-scheduler airflow dags trigger data_ingestion
+# ensure: SELECT COUNT(*) FROM raw.applications;  > 0
+docker compose exec airflow-scheduler airflow dags trigger feature_engineering
+docker compose exec airflow-scheduler airflow dags trigger model_training
+docker compose exec airflow-scheduler airflow dags trigger batch_prediction
+curl -X POST http://localhost:8000/reload
+```
 
-# Telegram alerts (optional)
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
+After changes under `sql/`: `docker compose down -v && docker compose up -d`.
+
+## Feature drift → Telegram
+
+Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.  
+If Docker cannot reach `api.telegram.org`, run on the host:
+
+```bash
+make telegram-loop
+```
+
+## Docs
+
+- [Lending Club](docs/LENDING_CLUB.md)
+- [Architecture](docs/architecture.md)
+- [Features](docs/feature_documentation.md)
+- [Model card](docs/model_card.md)
+- [System overview](docs/SYSTEM_OVERVIEW.md)
+
+## License
+
+Educational / portfolio project.

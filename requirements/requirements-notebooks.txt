@@ -1,0 +1,17 @@
+# Minimal stack to run notebooks locally (Jupyter kernel)
+numpy>=1.26
+pandas>=2.1
+scipy>=1.11
+scikit-learn>=1.4
+matplotlib>=3.8
+loguru>=0.7
+lightgbm>=4.3
+catboost>=1.2
+xgboost>=2.0
+shap>=0.44
+optuna>=3.5
+python-dotenv>=1.0
+pyyaml>=6.0
+sqlalchemy>=2.0
+ipykernel>=6.29
+jupyter>=1.0
