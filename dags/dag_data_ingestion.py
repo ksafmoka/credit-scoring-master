@@ -66,20 +66,44 @@ def load_raw_data(**context):
 
 
 def generate_payment_history(**context):
-    from src.config import get_db_engine
+    from src.config import IngestionConfig, get_db_engine
     from src.data.ingestion import generate_synthetic_payment_history
 
     engine = get_db_engine()
-    n = generate_synthetic_payment_history(engine)
+    print(
+        f"Payment history config: max_apps={IngestionConfig.PAYMENT_HISTORY_MAX_APPS}, "
+        f"batch={IngestionConfig.PAYMENT_HISTORY_BATCH_SIZE}, "
+        f"n_per_loan={IngestionConfig.PAYMENT_HISTORY_N_PER_LOAN}, "
+        f"strategy={IngestionConfig.SAMPLE_STRATEGY}"
+    )
+    n = generate_synthetic_payment_history(
+        engine,
+        max_apps=IngestionConfig.PAYMENT_HISTORY_MAX_APPS,
+        batch_size=IngestionConfig.PAYMENT_HISTORY_BATCH_SIZE,
+        n_payments_per_loan=IngestionConfig.PAYMENT_HISTORY_N_PER_LOAN,
+        sample_strategy=IngestionConfig.SAMPLE_STRATEGY,
+    )
+    print(f"Generated {n} payment records")
     context["ti"].xcom_push(key="payments_generated", value=n)
 
 
 def generate_bureau(**context):
-    from src.config import get_db_engine
+    from src.config import IngestionConfig, get_db_engine
     from src.data.ingestion import generate_synthetic_bureau
 
     engine = get_db_engine()
-    n = generate_synthetic_bureau(engine)
+    print(
+        f"Bureau config: max_apps={IngestionConfig.BUREAU_MAX_APPS} "
+        f"(None=all), batch={IngestionConfig.BUREAU_BATCH_SIZE}, "
+        f"strategy={IngestionConfig.SAMPLE_STRATEGY}"
+    )
+    n = generate_synthetic_bureau(
+        engine,
+        max_apps=IngestionConfig.BUREAU_MAX_APPS,
+        batch_size=IngestionConfig.BUREAU_BATCH_SIZE,
+        sample_strategy=IngestionConfig.SAMPLE_STRATEGY,
+    )
+    print(f"Generated {n} bureau records")
     context["ti"].xcom_push(key="bureau_generated", value=n)
 
 

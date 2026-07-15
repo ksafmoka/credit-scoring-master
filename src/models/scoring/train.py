@@ -114,6 +114,11 @@ def get_model(model_type: str, params: dict | None = None):
     if model_type == "catboost":
         from catboost import CatBoostClassifier
 
+        # auto_class_weights handles imbalance for PD ~10-15% default
+        # Caller can override with explicit class_weights if needed
+        if "auto_class_weights" not in params and "class_weights" not in params:
+            params.setdefault("auto_class_weights", "Balanced")
+
         return CatBoostClassifier(
             verbose=False,
             random_seed=seed,
@@ -124,6 +129,8 @@ def get_model(model_type: str, params: dict | None = None):
     if model_type == "lightgbm":
         from lightgbm import LGBMClassifier
 
+        # scale_pos_weight = neg/pos for imbalanced PD
+        # If not provided, LGBM handles moderate imbalance well, but we set is_unbalance=False by default
         return LGBMClassifier(
             random_state=seed,
             verbose=-1,
@@ -253,7 +260,25 @@ def train_model(
     X_train = X_train.fillna(medians)
     X_val = X_val.fillna(medians)
 
-    model = get_model(model_type, params or {})
+    # Class imbalance handling: Lending Club default ~10-20%, moderate imbalance
+    # For portfolio we show awareness: compute scale_pos_weight = neg/pos
+    pos_rate = float(y_train.mean()) if len(y_train) else 0.15
+    neg_rate = 1.0 - pos_rate
+    scale_pos_weight = (neg_rate / pos_rate) if pos_rate > 0 else 1.0
+    logger.info(
+        f"Imbalance: train default_rate={pos_rate:.3%}, "
+        f"scale_pos_weight={scale_pos_weight:.2f} (neg/pos)"
+    )
+
+    # Inject imbalance handling into params if not already set
+    imbalance_params = dict(params or {})
+    if model_type == "xgboost" and "scale_pos_weight" not in imbalance_params:
+        imbalance_params["scale_pos_weight"] = scale_pos_weight
+    if model_type == "lightgbm" and "scale_pos_weight" not in imbalance_params and "class_weight" not in imbalance_params:
+        # LGBM can use scale_pos_weight or is_unbalance; we set scale_pos_weight for explicit handling
+        imbalance_params["scale_pos_weight"] = scale_pos_weight
+
+    model = get_model(model_type, imbalance_params)
     model = _fit_boosting(model, model_type, X_train, y_train, X_val, y_val)
 
     if calibrate:
