@@ -477,28 +477,71 @@ def load_lending_club_data(
 
 def generate_synthetic_payment_history(
     engine: Engine,
-    n_payments_per_loan: int = 12,
+    n_payments_per_loan: int | None = None,
     seed: int = 42,
+    max_apps: int | None = None,
+    batch_size: int | None = None,
+    sample_strategy: str | None = None,
 ) -> int:
-    """Generate PRE-application payment history (no leakage)."""
+    """
+    Generate PRE-application payment history (no leakage) with batching.
+
+    Fixes OOM for 2.2M rows: previously built 27M dicts in RAM and crashed
+    Airflow. Now processes in batches (default 5000 apps -> ~60k payments/batch)
+    and supports sampling.
+
+    - Recent sampling: ORDER BY application_date DESC LIMIT max_apps
+      → best for time-based ML splits, keeps history for validation/test period
+    - max_apps=None → full table (not recommended for >300k)
+    """
+    from src.config import IngestionConfig
+
     rng = np.random.default_rng(seed)
+    n_payments_per_loan = (
+        n_payments_per_loan
+        if n_payments_per_loan is not None
+        else IngestionConfig.PAYMENT_HISTORY_N_PER_LOAN
+    )
+    batch_size = batch_size or IngestionConfig.PAYMENT_HISTORY_BATCH_SIZE
+    if max_apps is None:
+        max_apps = IngestionConfig.PAYMENT_HISTORY_MAX_APPS
+    sample_strategy = (sample_strategy or IngestionConfig.SAMPLE_STRATEGY).lower()
+
+    # Resolve applications to generate history for
+    base_query = """
+        SELECT application_id, client_id, loan_amount, loan_term,
+               is_default, application_date
+        FROM raw.applications
+    """
+    params: dict = {}
+    if max_apps is not None and max_apps > 0:
+        if sample_strategy == "recent":
+            query = base_query + " ORDER BY application_date DESC, application_id DESC LIMIT :limit"
+            params["limit"] = int(max_apps)
+        elif sample_strategy == "random":
+            # Postgres random() is heavy but ok for one-time sampling
+            query = base_query + " ORDER BY random() LIMIT :limit"
+            params["limit"] = int(max_apps)
+        else:
+            query = base_query + " ORDER BY application_date DESC LIMIT :limit"
+            params["limit"] = int(max_apps)
+        logger.info(
+            f"Payment history: sampling {max_apps} apps strategy={sample_strategy}"
+        )
+    else:
+        query = base_query
+        logger.info("Payment history: using ALL applications (may OOM)")
 
     with engine.connect() as conn:
-        apps = pd.read_sql(
-            """
-            SELECT application_id, client_id, loan_amount, loan_term,
-                   is_default, application_date
-            FROM raw.applications
-            """,
-            conn,
-        )
+        apps = pd.read_sql(text(query), conn, params=params or None)
 
     if apps.empty:
         logger.warning("No applications found; skip payment history")
         return 0
 
     logger.info(
-        f"Generating pre-application payment history for {len(apps)} apps"
+        f"Generating pre-application payment history for {len(apps)} apps "
+        f"in batches of {batch_size} (n_per_loan={n_payments_per_loan})"
     )
     apps["application_date"] = pd.to_datetime(apps["application_date"])
     apps["loan_amount"] = pd.to_numeric(apps["loan_amount"], errors="coerce").fillna(0)
@@ -506,115 +549,187 @@ def generate_synthetic_payment_history(
         pd.to_numeric(apps["loan_term"], errors="coerce").fillna(36).astype(int)
     )
 
-    records: list[dict] = []
-    for row in apps.itertuples(index=False):
-        n_pay = int(min(n_payments_per_loan, max(int(row.loan_term or 36), 1)))
-        monthly = float(row.loan_amount) / max(n_pay, 1)
-        # keep payment amounts finite
-        monthly = float(np.clip(monthly, 0, 1e9))
-        end_offset = int(rng.integers(1, 31))
-        for month in range(n_pay):
-            payment_date = row.application_date - pd.DateOffset(
-                months=n_pay - month, days=end_offset
-            )
-            if rng.random() < 0.12:
-                days_overdue = int(
-                    rng.choice([5, 15, 30, 60], p=[0.4, 0.3, 0.2, 0.1])
-                )
-            else:
-                days_overdue = 0
-            paid_ratio = max(
-                0.0, 1.0 - days_overdue / 100.0 * float(rng.random())
-            )
-            records.append(
-                {
-                    "application_id": int(row.application_id),
-                    "payment_date": payment_date.date(),
-                    "amount_due": round(monthly, 2),
-                    "amount_paid": round(monthly * paid_ratio, 2),
-                    "days_overdue": days_overdue,
-                }
-            )
-
-    payments_df = pd.DataFrame.from_records(records)
+    # Truncate once before batched inserts
     with engine.begin() as conn:
-        conn.execute(
-            text("TRUNCATE TABLE raw.payment_history RESTART IDENTITY")
-        )
-        payments_df.to_sql(
-            "payment_history",
-            conn,
-            schema="raw",
-            if_exists="append",
-            index=False,
-            method="multi",
-            chunksize=10_000,
-        )
+        conn.execute(text("TRUNCATE TABLE raw.payment_history RESTART IDENTITY"))
+    logger.info("Truncated raw.payment_history")
 
-    logger.info(f"Generated {len(payments_df)} payment records")
-    return len(payments_df)
+    total_generated = 0
+    # Process in batches to keep RAM < 500MB
+    for start in range(0, len(apps), batch_size):
+        batch = apps.iloc[start : start + batch_size]
+        records: list[dict] = []
+        for row in batch.itertuples(index=False):
+            n_pay = int(min(n_payments_per_loan, max(int(row.loan_term or 36), 1)))
+            monthly = float(row.loan_amount) / max(n_pay, 1)
+            monthly = float(np.clip(monthly, 0, 1e9))
+            end_offset = int(rng.integers(1, 31))
+            # Pre-calc dates without heavy DateOffset in inner loop? keep simple but safe
+            for month in range(n_pay):
+                payment_date = row.application_date - pd.DateOffset(
+                    months=n_pay - month, days=end_offset
+                )
+                if rng.random() < 0.12:
+                    days_overdue = int(
+                        rng.choice([5, 15, 30, 60], p=[0.4, 0.3, 0.2, 0.1])
+                    )
+                else:
+                    days_overdue = 0
+                paid_ratio = max(
+                    0.0, 1.0 - days_overdue / 100.0 * float(rng.random())
+                )
+                records.append(
+                    {
+                        "application_id": int(row.application_id),
+                        "payment_date": payment_date.date(),
+                        "amount_due": round(monthly, 2),
+                        "amount_paid": round(monthly * paid_ratio, 2),
+                        "days_overdue": days_overdue,
+                    }
+                )
+
+        if not records:
+            continue
+        payments_df = pd.DataFrame.from_records(records)
+        # Batch insert
+        with engine.begin() as conn:
+            payments_df.to_sql(
+                "payment_history",
+                conn,
+                schema="raw",
+                if_exists="append",
+                index=False,
+                method="multi",
+                chunksize=10_000,
+            )
+        total_generated += len(payments_df)
+        if (start // batch_size) % 5 == 0 or total_generated < 100_000:
+            logger.info(
+                f"Payment history batch {start // batch_size + 1}: "
+                f"{len(payments_df)} rows, total={total_generated}"
+            )
+        # free
+        del records, payments_df
+
+    logger.info(f"Generated {total_generated} payment records total")
+    return total_generated
 
 
-def generate_synthetic_bureau(engine: Engine, seed: int = 42) -> int:
-    """Generate one credit-bureau snapshot per client dated before application."""
+def generate_synthetic_bureau(
+    engine: Engine,
+    seed: int = 42,
+    max_apps: int | None = None,
+    batch_size: int | None = None,
+    sample_strategy: str | None = None,
+) -> int:
+    """
+    Generate one credit-bureau snapshot per client dated before application.
+
+    Bureau = внешняя кредитная история клиента (до подачи заявки).
+    В реальном банке это ответ бюро (Equifax/Experian): сколько запросов,
+    активных займов, просрочек в прошлом, возраст старейшего счета.
+    Синтетика помогает показать фичи `bureau_balance_to_income`,
+    `inquiries_per_account` и их влияние на PD.
+
+    Batched implementation: even for 2.2M rows we insert by chunks.
+    max_apps=None means all apps (OK, 1 row per app, ~2.2M rows ~ low memory).
+    """
+    from src.config import IngestionConfig
+
     rng = np.random.default_rng(seed + 7)
+    batch_size = batch_size or IngestionConfig.BUREAU_BATCH_SIZE
+    if max_apps is None:
+        max_apps = IngestionConfig.BUREAU_MAX_APPS  # None by default = all
+    sample_strategy = (sample_strategy or IngestionConfig.SAMPLE_STRATEGY).lower()
+
+    base_query = """
+        SELECT application_id, client_id, income, loan_amount,
+               application_date, num_open_accounts
+        FROM raw.applications
+    """
+    params: dict = {}
+    if max_apps is not None and max_apps > 0:
+        if sample_strategy == "recent":
+            query = base_query + " ORDER BY application_date DESC LIMIT :limit"
+            params["limit"] = int(max_apps)
+        elif sample_strategy == "random":
+            query = base_query + " ORDER BY random() LIMIT :limit"
+            params["limit"] = int(max_apps)
+        else:
+            query = base_query + " ORDER BY application_date DESC LIMIT :limit"
+            params["limit"] = int(max_apps)
+        logger.info(f"Bureau: sampling {max_apps} apps strategy={sample_strategy}")
+    else:
+        query = base_query
+        logger.info("Bureau: using ALL applications")
 
     with engine.connect() as conn:
-        apps = pd.read_sql(
-            """
-            SELECT application_id, client_id, income, loan_amount,
-                   application_date, num_open_accounts
-            FROM raw.applications
-            """,
-            conn,
-        )
+        apps = pd.read_sql(text(query), conn, params=params or None)
 
     if apps.empty:
+        logger.warning("No applications for bureau generation")
         return 0
 
     apps["application_date"] = pd.to_datetime(apps["application_date"])
     apps["income"] = pd.to_numeric(apps["income"], errors="coerce").fillna(50_000)
     apps["loan_amount"] = pd.to_numeric(apps["loan_amount"], errors="coerce").fillna(0)
 
-    rows: list[dict] = []
-    for row in apps.itertuples(index=False):
-        report_date = (
-            row.application_date - pd.Timedelta(days=int(rng.integers(7, 60)))
-        ).date()
-        income = float(np.clip(float(row.income), 1.0, 1e8))
-        leverage = float(row.loan_amount) / max(income, 1.0)
-        balance = float(
-            np.clip(
-                income * float(rng.uniform(0.1, 1.0)) * (0.7 + leverage),
-                0,
-                1e10,
-            )
-        )
-        inquiries = int(rng.integers(0, 5))
-        active = max(1, int(row.num_open_accounts or 1))
-        rows.append(
-            {
-                "client_id": int(row.client_id),
-                "report_date": report_date,
-                "num_inquiries_6m": inquiries,
-                "num_active_loans": active,
-                "total_balance": round(balance, 2),
-                "num_defaults_hist": int(rng.integers(0, 2)),
-                "oldest_account_months": int(rng.integers(12, 240)),
-            }
-        )
+    logger.info(
+        f"Generating bureau history for {len(apps)} apps in batches of {batch_size}"
+    )
 
-    bureau_df = pd.DataFrame.from_records(rows)
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE raw.credit_bureau RESTART IDENTITY"))
-        bureau_df.to_sql(
-            "credit_bureau",
-            conn,
-            schema="raw",
-            if_exists="append",
-            index=False,
-            method="multi",
-            chunksize=10_000,
-        )
-    logger.info(f"Generated {len(bureau_df)} bureau records")
-    return len(bureau_df)
+    logger.info("Truncated raw.credit_bureau")
+
+    total_generated = 0
+    for start in range(0, len(apps), batch_size):
+        batch = apps.iloc[start : start + batch_size]
+        rows: list[dict] = []
+        for row in batch.itertuples(index=False):
+            report_date = (
+                row.application_date - pd.Timedelta(days=int(rng.integers(7, 60)))
+            ).date()
+            income = float(np.clip(float(row.income), 1.0, 1e8))
+            leverage = float(row.loan_amount) / max(income, 1.0)
+            balance = float(
+                np.clip(
+                    income * float(rng.uniform(0.1, 1.0)) * (0.7 + leverage),
+                    0,
+                    1e10,
+                )
+            )
+            inquiries = int(rng.integers(0, 5))
+            active = max(1, int(row.num_open_accounts or 1))
+            rows.append(
+                {
+                    "client_id": int(row.client_id),
+                    "report_date": report_date,
+                    "num_inquiries_6m": inquiries,
+                    "num_active_loans": active,
+                    "total_balance": round(balance, 2),
+                    "num_defaults_hist": int(rng.integers(0, 2)),
+                    "oldest_account_months": int(rng.integers(12, 240)),
+                }
+            )
+
+        if not rows:
+            continue
+        bureau_df = pd.DataFrame.from_records(rows)
+        with engine.begin() as conn:
+            bureau_df.to_sql(
+                "credit_bureau",
+                conn,
+                schema="raw",
+                if_exists="append",
+                index=False,
+                method="multi",
+                chunksize=10_000,
+            )
+        total_generated += len(bureau_df)
+        if (start // batch_size) % 10 == 0:
+            logger.info(f"Bureau batch {start // batch_size + 1}: total={total_generated}")
+        del rows, bureau_df
+
+    logger.info(f"Generated {total_generated} bureau records total")
+    return total_generated

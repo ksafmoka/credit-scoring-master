@@ -69,6 +69,32 @@ class TrainingConfig:
     }
 
 
+class IngestionConfig:
+    """
+    Synthetic history generation controls.
+
+    Why 150k default: 2.2M * 12 = 27M payment rows OOMs Airflow worker.
+    Batching + recent sampling keeps memory <500MB and DAG stable.
+    Env-overridable for experiments.
+    """
+
+    # None = all apps; int = limit recent applications
+    PAYMENT_HISTORY_MAX_APPS: int | None = (
+        int(v) if (v := os.getenv("PAYMENT_HISTORY_MAX_APPS", "150000").strip()) != "" else None
+    )
+    PAYMENT_HISTORY_BATCH_SIZE: int = int(
+        os.getenv("PAYMENT_HISTORY_BATCH_SIZE", "5000")
+    )
+    PAYMENT_HISTORY_N_PER_LOAN: int = int(
+        os.getenv("PAYMENT_HISTORY_N_PER_LOAN", "12")
+    )
+    BUREAU_MAX_APPS: int | None = (
+        int(v) if (v := os.getenv("BUREAU_MAX_APPS", "").strip()) != "" else None
+    )
+    BUREAU_BATCH_SIZE: int = int(os.getenv("BUREAU_BATCH_SIZE", "10000"))
+    SAMPLE_STRATEGY: str = os.getenv("HISTORY_SAMPLE_STRATEGY", "recent").strip().lower()
+
+
 class MonitoringConfig:
     PSI_THRESHOLD: float = 0.15
     PSI_WARNING: float = 0.10
@@ -83,6 +109,32 @@ class MonitoringConfig:
     @staticmethod
     def telegram_chat_id() -> str:
         return os.getenv("TELEGRAM_CHAT_ID", "").strip()
+
+
+class FeatureEngineeringConfig:
+    """
+    Feature engineering batching to handle 2.2M rows without OOM / heartbeat timeout.
+    Old code loaded 2.2M into RAM + single to_sql transaction (4min+) -> DNS/heartbeat fail.
+    New: process in 100k chunks, commit per batch.
+    """
+
+    NUMERICAL_BATCH_SIZE: int = int(
+        os.getenv("FE_NUMERICAL_BATCH_SIZE", "100000")
+    )
+    BUREAU_BATCH_SIZE: int = int(os.getenv("FE_BUREAU_BATCH_SIZE", "100000"))
+    AGGREGATION_BATCH_SIZE: int = int(
+        os.getenv("FE_AGGREGATION_BATCH_SIZE", "100000")
+    )
+    TARGET_ENCODING_BATCH_SIZE: int = int(
+        os.getenv("FE_TARGET_ENCODING_BATCH_SIZE", "100000")
+    )
+    STAGING_WRITE_BATCH_SIZE: int = int(
+        os.getenv("FE_STAGING_WRITE_BATCH_SIZE", "50000")
+    )
+    # Optional limit for quick dev runs (None = all 2.2M)
+    MAX_APPS: int | None = (
+        int(v) if (v := os.getenv("FE_MAX_APPS", "").strip()) != "" else None
+    )
 
 
 class FeatureConfig:
