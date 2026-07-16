@@ -69,6 +69,33 @@ class TrainingConfig:
     }
 
 
+class IngestionConfig:
+    """
+    Synthetic history generation controls.
+
+    Why 300k default (was 150k): 2.2M * 12 = 27M payment rows OOMs Airflow worker.
+    Batched + random sampling gives uniform train coverage and keeps memory <500MB.
+    300k payments + 400k FE = 75% coverage with history, 25% cold-start (realistic).
+    Env-overridable.
+    """
+
+    # None = all apps; int = limit applications
+    PAYMENT_HISTORY_MAX_APPS: int | None = (
+        int(v) if (v := os.getenv("PAYMENT_HISTORY_MAX_APPS", "300000").strip()) != "" else None
+    )
+    PAYMENT_HISTORY_BATCH_SIZE: int = int(
+        os.getenv("PAYMENT_HISTORY_BATCH_SIZE", "5000")
+    )
+    PAYMENT_HISTORY_N_PER_LOAN: int = int(
+        os.getenv("PAYMENT_HISTORY_N_PER_LOAN", "12")
+    )
+    BUREAU_MAX_APPS: int | None = (
+        int(v) if (v := os.getenv("BUREAU_MAX_APPS", "").strip()) != "" else None
+    )
+    BUREAU_BATCH_SIZE: int = int(os.getenv("BUREAU_BATCH_SIZE", "10000"))
+    SAMPLE_STRATEGY: str = os.getenv("HISTORY_SAMPLE_STRATEGY", "random").strip().lower()
+
+
 class MonitoringConfig:
     PSI_THRESHOLD: float = 0.15
     PSI_WARNING: float = 0.10
@@ -83,6 +110,34 @@ class MonitoringConfig:
     @staticmethod
     def telegram_chat_id() -> str:
         return os.getenv("TELEGRAM_CHAT_ID", "").strip()
+
+
+class FeatureEngineeringConfig:
+    """
+    Feature engineering batching + cold-start aware sampling.
+
+    Old: 2.2M RAM + single to_sql transaction (4min+) -> DNS/heartbeat fail.
+    New: 100k chunks, 50k commit batches, sequential DAG, consistent fe_ids table
+    with 75% history coverage (300k with payments + 100k cold-start = 400k total).
+    """
+
+    NUMERICAL_BATCH_SIZE: int = int(
+        os.getenv("FE_NUMERICAL_BATCH_SIZE", "100000")
+    )
+    BUREAU_BATCH_SIZE: int = int(os.getenv("FE_BUREAU_BATCH_SIZE", "100000"))
+    AGGREGATION_BATCH_SIZE: int = int(
+        os.getenv("FE_AGGREGATION_BATCH_SIZE", "100000")
+    )
+    TARGET_ENCODING_BATCH_SIZE: int = int(
+        os.getenv("FE_TARGET_ENCODING_BATCH_SIZE", "100000")
+    )
+    STAGING_WRITE_BATCH_SIZE: int = int(
+        os.getenv("FE_STAGING_WRITE_BATCH_SIZE", "50000")
+    )
+    # None = all 2.2M for full prod, 400k = 300k with history + 100k cold-start for weak PC
+    MAX_APPS: int | None = (
+        int(v) if (v := os.getenv("FE_MAX_APPS", "").strip()) != "" else None
+    )
 
 
 class FeatureConfig:

@@ -84,12 +84,8 @@ class RegularizedTargetEncoder:
 
         return result
 
-    def fit_transform(
-        self,
-        engine: Engine,
-        train_cutoff: str,
-        execution_date: str | None = None,
-    ) -> pd.DataFrame:
+    def fit_from_engine(self, engine: Engine, train_cutoff: str) -> None:
+        """Fit encoder from DB using train cutoff, with fallback to all labeled."""
         cols_sql = ", ".join(f"a.{c}" for c in self.cols)
         with engine.connect() as conn:
             train_df = pd.read_sql(
@@ -108,7 +104,6 @@ class RegularizedTargetEncoder:
             )
 
         if train_df.empty:
-            # LC dates may all be before/after configured cutoff — fit on all labeled rows
             logger.warning(
                 f"Empty TE train for cutoff={train_cutoff}; fitting on ALL labeled apps"
             )
@@ -134,32 +129,101 @@ class RegularizedTargetEncoder:
             train_df[self.target_col] = train_df[self.target_col].astype(float)
             self.fit(train_df)
 
-        # Transform full population (no Airflow-ds filter)
+    def fit_transform(
+        self,
+        engine: Engine,
+        train_cutoff: str,
+        execution_date: str | None = None,
+        batch_size: int | None = None,
+        max_apps: int | None = None,
+        sample_strategy: str | None = None,
+    ) -> pd.DataFrame:
+        """Batched version: fits then transforms in chunks to avoid 2.2M RAM spike."""
+        from src.config import FeatureEngineeringConfig, IngestionConfig
+
+        batch_size = batch_size or FeatureEngineeringConfig.TARGET_ENCODING_BATCH_SIZE
+        if max_apps is None:
+            max_apps = FeatureEngineeringConfig.MAX_APPS
+        sample_strategy = (sample_strategy or IngestionConfig.SAMPLE_STRATEGY).lower()
+
+        self.fit_from_engine(engine, train_cutoff)
+
+        # Count total
+        count_q = "SELECT COUNT(*) FROM raw.applications"
+        count_params: dict = {}
+        if execution_date:
+            count_q += " WHERE application_date <= :execution_date"
+            count_params["execution_date"] = execution_date
         with engine.connect() as conn:
-            if execution_date:
-                all_df = pd.read_sql(
+            total = int(conn.execute(text(count_q), count_params or None).scalar() or 0)
+        if max_apps is not None:
+            total = min(total, int(max_apps))
+        if total == 0:
+            return pd.DataFrame()
+
+        logger.info(
+            f"Target encoding transform batched: total={total}, batch_size={batch_size}, strategy={sample_strategy}"
+        )
+
+        # Random pre-selection for variant A (uniform coverage)
+        random_ids = None
+        if sample_strategy == "random" and max_apps is not None:
+            with engine.connect() as conn:
+                id_df = pd.read_sql(
                     text(
-                        f"""
-                        SELECT application_id, {', '.join(self.cols)}
-                        FROM raw.applications
-                        WHERE application_date <= :execution_date
-                        """
+                        f"SELECT application_id FROM raw.applications "
+                        f"{'WHERE ' + count_q.split('WHERE',1)[1] if 'WHERE' in count_q else ''} "
+                        f"ORDER BY random() LIMIT :limit"
                     ),
                     conn,
-                    params={"execution_date": execution_date},
+                    params={**count_params, "limit": int(max_apps)},
                 )
+                random_ids = id_df["application_id"].tolist()
+                total = len(random_ids)
+
+        results = []
+        for offset in range(0, total, batch_size):
+            limit = min(batch_size, total - offset)
+
+            if random_ids is not None:
+                batch_ids = random_ids[offset : offset + limit]
+                if not batch_ids:
+                    continue
+                q = f"""
+                    SELECT application_id, {', '.join(self.cols)}
+                    FROM raw.applications
+                    WHERE application_id = ANY(:ids)
+                """
+                params = {"ids": batch_ids}
             else:
-                all_df = pd.read_sql(
-                    text(
-                        f"""
-                        SELECT application_id, {', '.join(self.cols)}
-                        FROM raw.applications
-                        """
-                    ),
-                    conn,
+                order = "application_date DESC, application_id DESC" if max_apps else "application_id"
+                q = f"""
+                    SELECT application_id, {', '.join(self.cols)}
+                    FROM raw.applications
+                    {f'WHERE application_date <= :execution_date' if execution_date else ''}
+                    ORDER BY {order}
+                    LIMIT :limit OFFSET :offset
+                """
+                params = dict(count_params)
+                params["limit"] = limit
+                params["offset"] = offset
+
+            with engine.connect() as conn:
+                batch_df = pd.read_sql(text(q), conn, params=params)
+
+            if batch_df.empty:
+                continue
+            transformed = self.transform(batch_df, apply_noise=False)
+            results.append(transformed)
+            if (offset // batch_size) % 5 == 0:
+                logger.info(
+                    f"Target encoding batch {offset // batch_size + 1}: {len(transformed)} rows"
                 )
 
-        return self.transform(all_df, apply_noise=False)
+        if not results:
+            return pd.DataFrame()
+        final = pd.concat(results, ignore_index=True)
+        return final
 
     def to_dict(self) -> dict:
         return {

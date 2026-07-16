@@ -31,6 +31,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --prefer-binary \
        --default-timeout=300 \
        --retries=10 \
+       --constraint /tmp/constraints.txt \
        --upgrade-strategy only-if-needed \
        -r /tmp/requirements-airflow.txt
 

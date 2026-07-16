@@ -1,6 +1,7 @@
-# Extra packages ONLY (no apache-airflow, no sqlalchemy pins).
+# Extra packages ONLY (no apache-airflow pins).
 # Provider is installed separately in Dockerfile.airflow with Airflow constraints.
 # Base image: apache/airflow:2.8.1-python3.11 already includes Airflow + alembic.
+# IMPORTANT: Airflow 2.8.1 requires SQLAlchemy <2.0, >=1.4.28 (see constraints)
 
 # ML (training DAGs)
 catboost==1.2.3
@@ -17,7 +18,8 @@ scipy>=1.10,<1.13
 # MLflow tracking client (server is a separate container)
 mlflow==2.14.3
 psycopg2-binary==2.9.9
-sqlalchemy==2.0.25
+# Keep SQLAlchemy compatible with Airflow 2.8.1 constraints (1.4.51)
+SQLAlchemy==1.4.51
 
 # Explainability
 shap==0.44.1

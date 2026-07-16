@@ -2,10 +2,9 @@ x-airflow-common: &airflow-common
   build:
     context: .
     dockerfile: docker/Dockerfile.airflow
-  # Help containers reach public HTTPS (Telegram, PyPI) on some WSL/Docker Desktop setups
-  dns:
-    - 8.8.8.8
-    - 1.1.1.1
+  # NOTE: Do not set dns: 8.8.8.8 here — it breaks Docker's embedded DNS for `postgres` hostname
+  # (caused airflow-init "database not reachable after 60 attempts" and feature_engineering DNS failures).
+  # Docker already forwards external DNS, so Telegram/PyPI still work.
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
@@ -31,6 +30,22 @@ x-airflow-common: &airflow-common
     VAL_END_DATE: ${VAL_END_DATE:-2023-06-30}
     AUTO_DATE_SPLIT: ${AUTO_DATE_SPLIT:-true}
     N_OPTUNA_TRIALS: ${N_OPTUNA_TRIALS:-10}
+    MIN_AUC_FOR_REGISTRATION: ${MIN_AUC_FOR_REGISTRATION:-0.70}
+    CALIBRATION_METHOD: ${CALIBRATION_METHOD:-isotonic}
+    # Ingestion sampling (variant A random + 75% cold-start)
+    PAYMENT_HISTORY_MAX_APPS: ${PAYMENT_HISTORY_MAX_APPS:-300000}
+    PAYMENT_HISTORY_BATCH_SIZE: ${PAYMENT_HISTORY_BATCH_SIZE:-5000}
+    PAYMENT_HISTORY_N_PER_LOAN: ${PAYMENT_HISTORY_N_PER_LOAN:-12}
+    BUREAU_MAX_APPS: ${BUREAU_MAX_APPS:-}
+    BUREAU_BATCH_SIZE: ${BUREAU_BATCH_SIZE:-10000}
+    HISTORY_SAMPLE_STRATEGY: ${HISTORY_SAMPLE_STRATEGY:-random}
+    # Feature engineering batched
+    FE_NUMERICAL_BATCH_SIZE: ${FE_NUMERICAL_BATCH_SIZE:-100000}
+    FE_BUREAU_BATCH_SIZE: ${FE_BUREAU_BATCH_SIZE:-100000}
+    FE_AGGREGATION_BATCH_SIZE: ${FE_AGGREGATION_BATCH_SIZE:-100000}
+    FE_TARGET_ENCODING_BATCH_SIZE: ${FE_TARGET_ENCODING_BATCH_SIZE:-100000}
+    FE_STAGING_WRITE_BATCH_SIZE: ${FE_STAGING_WRITE_BATCH_SIZE:-50000}
+    FE_MAX_APPS: ${FE_MAX_APPS:-400000}
     # Optional Telegram (often blocked from Docker; monitoring works without it)
     TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
@@ -69,10 +84,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./sql:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres && pg_isready -U airflow -d airflow || pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 30
+      start_period: 20s
 
   airflow-init:
     <<: *airflow-common
