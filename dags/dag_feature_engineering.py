@@ -248,34 +248,45 @@ def compute_numerical_features(**context):
 
 
 def compute_aggregation_features(**context):
-    from src.config import FeatureEngineeringConfig, get_db_engine
+    from sqlalchemy import text
+    from src.config import FeatureConfig, FeatureEngineeringConfig, get_db_engine
     from src.features.aggregations import AggregationFeatureComputer
+    import pandas as pd
 
     engine = get_db_engine()
     computer = AggregationFeatureComputer(reference_date=None)
 
     try:
-        from src.config import FeatureConfig
-
         computer.windows = FeatureConfig.PAYMENT_WINDOWS
     except Exception:
         pass
 
-    # Aggregation now respects fe_ids table via its own batch logic, but we also pass filter hint
-    features = computer.compute(
-        engine,
-        batch_size=FeatureEngineeringConfig.AGGREGATION_BATCH_SIZE,
-        max_apps=FeatureEngineeringConfig.MAX_APPS,
-    )
+    # Use fe_ids for consistent application_id selection across all FE tasks
+    fe_filter = _get_fe_ids_filter(engine)
+    if fe_filter:
+        print("[aggregation] Using fe_ids for consistent ID selection")
+        with engine.connect() as conn:
+            payments = pd.read_sql(text(
+                "SELECT ph.* FROM raw.payment_history ph "
+                "WHERE ph.application_id IN (SELECT application_id FROM features.fe_ids)"
+            ), conn)
+        with engine.connect() as conn:
+            apps = pd.read_sql(text(
+                "SELECT application_id, application_date FROM raw.applications "
+                "WHERE application_id IN (SELECT application_id FROM features.fe_ids)"
+            ), conn)
+        print(f"[aggregation] fe_ids: apps={len(apps)}, payments={len(payments)}")
+        features = computer.compute_from_frames(payments, apps)
+    else:
+        features = computer.compute(
+            engine,
+            batch_size=FeatureEngineeringConfig.AGGREGATION_BATCH_SIZE,
+            max_apps=FeatureEngineeringConfig.MAX_APPS,
+        )
     print(f"aggregation shape: {features.shape}")
 
-    # Fallback: ensure fe_ids present even if no payments
     if features.empty or "application_id" not in features.columns:
-        from sqlalchemy import text
-        import pandas as pd
-
         with engine.connect() as conn:
-            # Try fe_ids first
             try:
                 features = pd.read_sql(text("SELECT application_id FROM features.fe_ids"), conn)
                 print(f"aggregation fallback fe_ids: {len(features)}")
@@ -286,19 +297,54 @@ def compute_aggregation_features(**context):
 
 
 def compute_target_encoding(**context):
+    from sqlalchemy import text
     from src.config import ARTIFACTS_DIR, FeatureEngineeringConfig, TrainingConfig, get_db_engine
     from src.features.target_encoding import RegularizedTargetEncoder
+    import pandas as pd
 
     engine = get_db_engine()
     encoder = RegularizedTargetEncoder(cols=["purpose", "home_ownership"], smoothing=20, noise_level=0.0)
 
-    result = encoder.fit_transform(
-        engine,
-        train_cutoff=TrainingConfig.TRAIN_END_DATE,
-        execution_date=None,
-        batch_size=FeatureEngineeringConfig.TARGET_ENCODING_BATCH_SIZE,
-        max_apps=FeatureEngineeringConfig.MAX_APPS,
-    )
+    # Use fe_ids for consistent ID selection
+    fe_filter = _get_fe_ids_filter(engine)
+    if fe_filter:
+        print("[target_encoding] Using fe_ids for consistent ID selection")
+        # Fit on train portion of fe_ids
+        with engine.connect() as conn:
+            train_df = pd.read_sql(text(
+                "SELECT a.application_id, a.purpose, a.home_ownership, a.is_default "
+                "FROM raw.applications a "
+                "WHERE a.application_id IN (SELECT application_id FROM features.fe_ids) "
+                "AND a.application_date <= :cutoff "
+                "AND a.is_default IS NOT NULL"
+            ), conn, params={"cutoff": TrainingConfig.TRAIN_END_DATE})
+        if train_df.empty:
+            # Fallback: fit on all labeled fe_ids
+            with engine.connect() as conn:
+                train_df = pd.read_sql(text(
+                    "SELECT a.application_id, a.purpose, a.home_ownership, a.is_default "
+                    "FROM raw.applications a "
+                    "WHERE a.application_id IN (SELECT application_id FROM features.fe_ids) "
+                    "AND a.is_default IS NOT NULL"
+                ), conn)
+        encoder.fit(train_df)
+        # Transform all fe_ids
+        with engine.connect() as conn:
+            all_apps = pd.read_sql(text(
+                "SELECT a.application_id, a.purpose, a.home_ownership "
+                "FROM raw.applications a "
+                "WHERE a.application_id IN (SELECT application_id FROM features.fe_ids)"
+            ), conn)
+        result = encoder.transform(all_apps, apply_noise=False)
+    else:
+        result = encoder.fit_transform(
+            engine,
+            train_cutoff=TrainingConfig.TRAIN_END_DATE,
+            execution_date=None,
+            batch_size=FeatureEngineeringConfig.TARGET_ENCODING_BATCH_SIZE,
+            max_apps=FeatureEngineeringConfig.MAX_APPS,
+        )
+
     if result.empty:
         raise ValueError("Target encoding 0 rows")
     print(f"target encoding shape: {result.shape}")
@@ -307,21 +353,78 @@ def compute_target_encoding(**context):
 
 
 def compute_bureau_features(**context):
+    from sqlalchemy import text
     from src.config import FeatureEngineeringConfig, get_db_engine
-    from src.features.bureau import BureauFeatureComputer
+    import numpy as np
+    import pandas as pd
 
     engine = get_db_engine()
-    features = BureauFeatureComputer().compute(
-        engine,
-        reference_date=None,
-        batch_size=FeatureEngineeringConfig.BUREAU_BATCH_SIZE,
-        max_apps=FeatureEngineeringConfig.MAX_APPS,
-    )
+
+    # Use fe_ids for consistent ID selection
+    fe_filter = _get_fe_ids_filter(engine)
+    if fe_filter:
+        print("[bureau] Using fe_ids for consistent ID selection")
+        # Batched query using fe_ids
+        with engine.connect() as conn:
+            fe_count = int(conn.execute(text("SELECT COUNT(*) FROM features.fe_ids")).scalar() or 0)
+        print(f"[bureau] fe_ids count: {fe_count}")
+
+        batch_size = FeatureEngineeringConfig.BUREAU_BATCH_SIZE
+        results = []
+        for offset in range(0, fe_count, batch_size):
+            limit = min(batch_size, fe_count - offset)
+            query = """
+                SELECT
+                    a.application_id,
+                    a.income,
+                    a.application_date,
+                    b.num_inquiries_6m,
+                    b.num_active_loans,
+                    b.total_balance,
+                    b.num_defaults_hist,
+                    b.oldest_account_months
+                FROM raw.applications a
+                LEFT JOIN LATERAL (
+                    SELECT *
+                    FROM raw.credit_bureau b
+                    WHERE b.client_id = a.client_id
+                      AND b.report_date < a.application_date
+                    ORDER BY b.report_date DESC
+                    LIMIT 1
+                ) b ON TRUE
+                WHERE a.application_id IN (SELECT application_id FROM features.fe_ids)
+                ORDER BY a.application_id
+                LIMIT :limit OFFSET :offset
+            """
+            with engine.connect() as conn:
+                df = pd.read_sql(text(query), conn, params={"limit": limit, "offset": offset})
+            if df.empty:
+                continue
+            income = pd.to_numeric(df["income"], errors="coerce").replace(0, np.nan)
+            balance = pd.to_numeric(df["total_balance"], errors="coerce")
+            inquiries = pd.to_numeric(df["num_inquiries_6m"], errors="coerce")
+            active = pd.to_numeric(df["num_active_loans"], errors="coerce").replace(0, np.nan)
+            out = pd.DataFrame({
+                "application_id": df["application_id"],
+                "bureau_balance_to_income": (balance / income).replace([np.inf, -np.inf], np.nan),
+                "inquiries_per_account": (inquiries / active).replace([np.inf, -np.inf], np.nan),
+                "avg_account_age_months": pd.to_numeric(df["oldest_account_months"], errors="coerce"),
+            })
+            results.append(out)
+            print(f"[bureau] batch {offset // batch_size + 1}: {len(out)} rows")
+
+        features = pd.concat(results, ignore_index=True) if results else pd.DataFrame(columns=["application_id"])
+    else:
+        from src.features.bureau import BureauFeatureComputer
+        features = BureauFeatureComputer().compute(
+            engine,
+            reference_date=None,
+            batch_size=FeatureEngineeringConfig.BUREAU_BATCH_SIZE,
+            max_apps=FeatureEngineeringConfig.MAX_APPS,
+        )
+
     print(f"bureau shape: {features.shape}")
     if features.empty or "application_id" not in features.columns:
-        from sqlalchemy import text
-        import pandas as pd
-
         with engine.connect() as conn:
             try:
                 features = pd.read_sql(text("SELECT application_id FROM features.fe_ids"), conn)
@@ -460,10 +563,21 @@ def merge_and_validate(**context):
 
     total = len(out)
     print(f"[merge] Writing final {total} rows batch {batch_size}")
-    # Cold-start stats for portfolio
+    # Cold-start analysis: check if aggregation features are NaN (no payment records)
+    # vs non-NaN (has payment records, possibly all on-time → overdue=0)
     if "avg_days_overdue_90d" in out.columns:
-        has_history = (out["avg_days_overdue_90d"] != 0).sum()
-        print(f"[merge] Cold-start analysis: {has_history}/{total} with history ({has_history/total:.1%}), {total-has_history} without (cold-start)")
+        # Before fillna, check staging table for actual NaN pattern
+        # In the merged frame, cold-start = was NaN before fillna(0.0)
+        # Since we already did fillna(0.0), we use the aggregation staging row count
+        has_agg_records = len(agg) if not agg.empty else 0
+        no_agg_records = total - has_agg_records
+        has_late_payments = (out["avg_days_overdue_90d"] != 0).sum()
+        has_on_time_history = has_agg_records - has_late_payments
+        print(f"[merge] Cold-start analysis:")
+        print(f"  {has_agg_records}/{total} with payment history ({has_agg_records/total:.1%})")
+        print(f"    → {has_late_payments} with late payments ({has_late_payments/total:.1%})")
+        print(f"    → {has_on_time_history} all on-time ({has_on_time_history/total:.1%})")
+        print(f"  {no_agg_records}/{total} cold-start / no records ({no_agg_records/total:.1%})")
 
     for start in range(0, total, batch_size):
         chunk = out.iloc[start : start + batch_size]

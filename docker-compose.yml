@@ -65,7 +65,7 @@ x-airflow-common: &airflow-common
     - airflow_logs:/opt/airflow/logs
     - ./artifacts:/opt/airflow/artifacts
     # Shared MLflow artifact store (must match MLflow service mount)
-    - ./mlflow_artifacts:/mlflow/artifacts
+    - mlflow_artifacts_vol:/mlflow/artifacts
     - ./data:/opt/airflow/data
   depends_on:
     postgres:
@@ -133,7 +133,7 @@ services:
     environment:
       MLFLOW_ARTIFACT_ROOT: /mlflow/artifacts
     volumes:
-      - ./mlflow_artifacts:/mlflow/artifacts
+      - mlflow_artifacts_vol:/mlflow/artifacts
     depends_on:
       postgres:
         condition: service_healthy
@@ -157,7 +157,7 @@ services:
       - ./src:/app/src
       - ./configs:/app/configs
       - ./artifacts:/app/artifacts
-      - ./mlflow_artifacts:/mlflow/artifacts
+      - mlflow_artifacts_vol:/mlflow/artifacts
     depends_on:
       - mlflow
       - postgres
@@ -182,3 +182,4 @@ volumes:
   postgres_data:
   grafana_data:
   airflow_logs:
+  mlflow_artifacts_vol:
