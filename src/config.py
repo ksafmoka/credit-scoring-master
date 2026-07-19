@@ -192,6 +192,13 @@ class FeatureConfig:
         + BUREAU_FEATURES
     )
 
+    # Features available WITHOUT payment history (for cold-start model)
+    COLD_START_FEATURES: list[str] = (
+        NUMERICAL_FEATURES
+        + TARGET_ENCODED_FEATURES
+        + BUREAU_FEATURES
+    )
+
     CRITICAL_NO_NULL: list[str] = [
         "loan_to_income",
         "credit_utilization",

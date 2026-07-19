@@ -23,23 +23,35 @@ def optimize_hyperparams(
     model_type: str,
     engine: Engine,
     n_trials: int = 30,
+    preloaded_data: dict | None = None,
 ) -> dict:
-    """Search hyperparameters; reuses one DB load for all trials."""
+    """Search hyperparameters; reuses one DB load for all trials.
+
+    If preloaded_data is provided, use it instead of loading from DB.
+    Expected keys: X_train, X_val, y_train, y_val, medians, feature_cols
+    """
     import optuna
     from src.models.scoring.evaluate import compute_metrics
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    train, val, _, feature_cols, medians = load_training_frames(engine)
-    if train.empty or val.empty:
-        raise ValueError("No data for hyperparameter optimization")
+    if preloaded_data:
+        X_train = preloaded_data["X_train"]
+        X_val = preloaded_data["X_val"]
+        y_train = preloaded_data["y_train"]
+        y_val = preloaded_data["y_val"]
+        feature_cols = preloaded_data["feature_cols"]
+    else:
+        train, val, _, feature_cols, medians = load_training_frames(engine)
+        if train.empty or val.empty:
+            raise ValueError("No data for hyperparameter optimization")
 
-    X_train, feature_cols = get_feature_matrix(train, feature_cols)
-    X_val, _ = get_feature_matrix(val, feature_cols)
-    y_train = train[TrainingConfig.TARGET_COL].astype(int)
-    y_val = val[TrainingConfig.TARGET_COL].astype(int)
-    X_train = X_train.fillna(medians)
-    X_val = X_val.fillna(medians)
+        X_train, feature_cols = get_feature_matrix(train, feature_cols)
+        X_val, _ = get_feature_matrix(val, feature_cols)
+        y_train = train[TrainingConfig.TARGET_COL].astype(int)
+        y_val = val[TrainingConfig.TARGET_COL].astype(int)
+        X_train = X_train.fillna(medians)
+        X_val = X_val.fillna(medians)
 
     def objective(trial: optuna.Trial) -> float:
         params = _suggest_params(trial, model_type)
