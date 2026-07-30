@@ -13,8 +13,7 @@ target_encoding:
     - purpose
   smoothing: 20
   min_samples: 10
-  # Noise only during experimental train-side TE; production path uses 0
-  noise_level: 0.0
+  noise_level: 0.0  # No noise in production; noise only during experiments
 
 numerical_clip:
   dti_ratio:
@@ -26,7 +25,9 @@ critical_features_no_null:
   - credit_utilization
   - income_log
 
-model_features:
+# Model A (with_history): ALL features
+model_a_features:
+  # Numerical + cross (16)
   - loan_to_income
   - credit_utilization
   - income_log
@@ -37,10 +38,16 @@ model_features:
   - num_open_accounts
   - num_delinquencies
   - interest_rate
+  - loan_term
+  - num_inquiries_6m
   - loan_amount_x_dti
   - income_x_credit_score
+  - dti_x_credit_score
+  - loan_amount_x_interest_rate
+  # Target encoding (2)
   - purpose_target_enc
   - home_ownership_target_enc
+  # Aggregation — payment history (7)
   - avg_days_overdue_30d
   - avg_days_overdue_90d
   - avg_days_overdue_180d
@@ -48,5 +55,32 @@ model_features:
   - pct_late_payments_90d
   - total_paid_90d
   - payment_consistency_90d
+  # Bureau (2)
+  - bureau_balance_to_income
+  - inquiries_per_account
+
+# Model B (cold_start): no aggregation features
+model_b_features:
+  # Numerical + cross (16)
+  - loan_to_income
+  - credit_utilization
+  - income_log
+  - loan_amount_log
+  - dti_ratio_clipped
+  - employment_years
+  - credit_score_norm
+  - num_open_accounts
+  - num_delinquencies
+  - interest_rate
+  - loan_term
+  - num_inquiries_6m
+  - loan_amount_x_dti
+  - income_x_credit_score
+  - dti_x_credit_score
+  - loan_amount_x_interest_rate
+  # Target encoding (2)
+  - purpose_target_enc
+  - home_ownership_target_enc
+  # Bureau (2)
   - bureau_balance_to_income
   - inquiries_per_account

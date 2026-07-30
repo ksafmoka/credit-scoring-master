@@ -1,16 +1,36 @@
-# PD model training configuration
+# PD model training configuration — dual-model architecture
 
 scoring:
+  # Models trained per segment (best-of-3 by raw val AUC)
   models:
     - catboost
     - lightgbm
     - xgboost
-  ensemble: true
+
+  # Calibration: isotonic | sigmoid | none
+  # Applied only if it improves AUC (conditional calibration)
   calibration: isotonic
-  min_auc_for_registration: 0.70
-  optuna_trials: 15
+
+  # Minimum AUC for MLflow registration
+  min_auc_for_registration: 0.695
+
+  # Optuna hyperparameter search
+  optuna_trials: 40
+
+  # Time-based split (justified by EDA statistical tests)
+  # See notebooks/01_EDA.ipynb for chi-squared, KS, PSI analysis
   time_split:
-    train_end: "2022-12-31"
-    val_end: "2023-06-30"
-  registered_model_name: credit_scoring
-  model_alias: champion
+    train_end: "2017-06-30"
+    val_end: "2017-12-31"
+    # AUTO_DATE_SPLIT=true in .env overrides these if dates yield empty splits
+
+  # Dual-model registration
+  segments:
+    with_history:
+      registered_model_name: credit_scoring_with_history
+      model_alias: champion
+      features: ALL_FEATURES  # 27 features (numerical + agg + TE + bureau)
+    cold_start:
+      registered_model_name: credit_scoring_cold_start
+      model_alias: champion
+      features: COLD_START_FEATURES  # 20 features (no aggregation)

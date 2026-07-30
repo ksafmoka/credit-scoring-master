@@ -26,13 +26,13 @@ x-airflow-common: &airflow-common
     APP_DB_PASSWORD: ml_password
     # Resolved in code: prefers lending_club.csv if file exists under /opt/airflow/data
     LENDING_CLUB_CSV_PATH: ${LENDING_CLUB_CSV_PATH:-/opt/airflow/data/lending_club.csv}
-    TRAIN_END_DATE: ${TRAIN_END_DATE:-2022-12-31}
-    VAL_END_DATE: ${VAL_END_DATE:-2023-06-30}
+    TRAIN_END_DATE: ${TRAIN_END_DATE:-2017-06-30}
+    VAL_END_DATE: ${VAL_END_DATE:-2017-12-31}
     AUTO_DATE_SPLIT: ${AUTO_DATE_SPLIT:-true}
     N_OPTUNA_TRIALS: ${N_OPTUNA_TRIALS:-10}
     MIN_AUC_FOR_REGISTRATION: ${MIN_AUC_FOR_REGISTRATION:-0.70}
     CALIBRATION_METHOD: ${CALIBRATION_METHOD:-isotonic}
-    # Ingestion sampling (variant A random + 75% cold-start)
+    # Ingestion sampling (variant A random + 50% cold-start)
     PAYMENT_HISTORY_MAX_APPS: ${PAYMENT_HISTORY_MAX_APPS:-300000}
     PAYMENT_HISTORY_BATCH_SIZE: ${PAYMENT_HISTORY_BATCH_SIZE:-5000}
     PAYMENT_HISTORY_N_PER_LOAN: ${PAYMENT_HISTORY_N_PER_LOAN:-12}
@@ -45,7 +45,7 @@ x-airflow-common: &airflow-common
     FE_AGGREGATION_BATCH_SIZE: ${FE_AGGREGATION_BATCH_SIZE:-100000}
     FE_TARGET_ENCODING_BATCH_SIZE: ${FE_TARGET_ENCODING_BATCH_SIZE:-100000}
     FE_STAGING_WRITE_BATCH_SIZE: ${FE_STAGING_WRITE_BATCH_SIZE:-50000}
-    FE_MAX_APPS: ${FE_MAX_APPS:-400000}
+    FE_MAX_APPS: ${FE_MAX_APPS:-600000}
     # Optional Telegram (often blocked from Docker; monitoring works without it)
     TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
@@ -65,7 +65,7 @@ x-airflow-common: &airflow-common
     - airflow_logs:/opt/airflow/logs
     - ./artifacts:/opt/airflow/artifacts
     # Shared MLflow artifact store (must match MLflow service mount)
-    - ./mlflow_artifacts:/mlflow/artifacts
+    - mlflow_artifacts_vol:/mlflow/artifacts
     - ./data:/opt/airflow/data
   depends_on:
     postgres:
@@ -133,7 +133,7 @@ services:
     environment:
       MLFLOW_ARTIFACT_ROOT: /mlflow/artifacts
     volumes:
-      - ./mlflow_artifacts:/mlflow/artifacts
+      - mlflow_artifacts_vol:/mlflow/artifacts
     depends_on:
       postgres:
         condition: service_healthy
@@ -157,7 +157,7 @@ services:
       - ./src:/app/src
       - ./configs:/app/configs
       - ./artifacts:/app/artifacts
-      - ./mlflow_artifacts:/mlflow/artifacts
+      - mlflow_artifacts_vol:/mlflow/artifacts
     depends_on:
       - mlflow
       - postgres
@@ -182,3 +182,4 @@ volumes:
   postgres_data:
   grafana_data:
   airflow_logs:
+  mlflow_artifacts_vol:

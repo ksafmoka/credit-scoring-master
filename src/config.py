@@ -47,8 +47,8 @@ class MLflowConfig:
 
 class TrainingConfig:
     # Overridable via env (set by prepare_lending_club.py → .env)
-    TRAIN_END_DATE: str = os.getenv("TRAIN_END_DATE", "2022-12-31")
-    VAL_END_DATE: str = os.getenv("VAL_END_DATE", "2023-06-30")
+    TRAIN_END_DATE: str = os.getenv("TRAIN_END_DATE", "2017-06-30")
+    VAL_END_DATE: str = os.getenv("VAL_END_DATE", "2017-12-31")
     RANDOM_SEED: int = 42
     N_OPTUNA_TRIALS: int = int(os.getenv("N_OPTUNA_TRIALS", "15"))
     CV_FOLDS: int = 5
@@ -75,7 +75,7 @@ class IngestionConfig:
 
     Why 300k default (was 150k): 2.2M * 12 = 27M payment rows OOMs Airflow worker.
     Batched + random sampling gives uniform train coverage and keeps memory <500MB.
-    300k payments + 400k FE = 75% coverage with history, 25% cold-start (realistic).
+    300k payments + 600k FE = 50% coverage with history, 50% cold-start (realistic).
     Env-overridable.
     """
 
@@ -118,7 +118,7 @@ class FeatureEngineeringConfig:
 
     Old: 2.2M RAM + single to_sql transaction (4min+) -> DNS/heartbeat fail.
     New: 100k chunks, 50k commit batches, sequential DAG, consistent fe_ids table
-    with 75% history coverage (300k with payments + 100k cold-start = 400k total).
+    with 50% history coverage (300k with payments + 300k cold-start = 600k total).
     """
 
     NUMERICAL_BATCH_SIZE: int = int(
@@ -134,7 +134,7 @@ class FeatureEngineeringConfig:
     STAGING_WRITE_BATCH_SIZE: int = int(
         os.getenv("FE_STAGING_WRITE_BATCH_SIZE", "50000")
     )
-    # None = all 2.2M for full prod, 400k = 300k with history + 100k cold-start for weak PC
+    # None = all 2.2M for full prod, 600k = 300k with history + 300k cold-start for weak PC
     MAX_APPS: int | None = (
         int(v) if (v := os.getenv("FE_MAX_APPS", "").strip()) != "" else None
     )
@@ -156,8 +156,12 @@ class FeatureConfig:
         "num_open_accounts",
         "num_delinquencies",
         "interest_rate",
+        "loan_term",
+        "num_inquiries_6m",
         "loan_amount_x_dti",
         "income_x_credit_score",
+        "dti_x_credit_score",
+        "loan_amount_x_interest_rate",
     ]
 
     CATEGORICAL_FEATURES: list[str] = [
@@ -189,6 +193,13 @@ class FeatureConfig:
         NUMERICAL_FEATURES
         + TARGET_ENCODED_FEATURES
         + AGGREGATION_FEATURES
+        + BUREAU_FEATURES
+    )
+
+    # Features available WITHOUT payment history (for cold-start model)
+    COLD_START_FEATURES: list[str] = (
+        NUMERICAL_FEATURES
+        + TARGET_ENCODED_FEATURES
         + BUREAU_FEATURES
     )
 

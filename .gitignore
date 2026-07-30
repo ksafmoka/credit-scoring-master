@@ -16,7 +16,7 @@ logs/
 *.log
 artifacts/*
 !artifacts/.gitkeep
-mlflow_artifacts/
+mlflow_artifacts/*
 !mlflow_artifacts/.gitkeep
 .idea/
 .vscode/
@@ -30,3 +30,4 @@ Thumbs.db
 htmlcov/
 *.db
 catboost_info/
+project_timeline.md

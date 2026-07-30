@@ -41,15 +41,22 @@ class NumericalFeatureComputer:
             df.get("interest_rate"), errors="coerce"
         )
 
+        # New features
+        loan_term = pd.to_numeric(df.get("loan_term"), errors="coerce").fillna(36)
+        result["loan_term"] = loan_term.clip(12, 84)
+
+        num_inquiries = pd.to_numeric(df.get("num_inquiries_6m"), errors="coerce").fillna(0)
+        result["num_inquiries_6m"] = num_inquiries.clip(0, 50)
+
         loan_amount = pd.to_numeric(df["loan_amount"], errors="coerce")
         income = pd.to_numeric(df["income"], errors="coerce")
-        # Keep cross-features in a safe float range for storage / stability
-        result["loan_amount_x_dti"] = (loan_amount * dti.fillna(0)).clip(
-            -1e12, 1e12
-        )
-        result["income_x_credit_score"] = (income * credit.fillna(0)).clip(
-            -1e12, 1e12
-        )
+        # Cross-features
+        result["loan_amount_x_dti"] = (loan_amount * dti.fillna(0)).clip(-1e12, 1e12)
+        result["income_x_credit_score"] = (income * credit.fillna(0)).clip(-1e12, 1e12)
+        result["dti_x_credit_score"] = (dti.fillna(0) * ((credit - 300.0) / 550.0).clip(0, 1)).clip(-1e6, 1e6)
+        result["loan_amount_x_interest_rate"] = (
+            loan_amount * pd.to_numeric(df.get("interest_rate"), errors="coerce").fillna(0)
+        ).clip(-1e12, 1e12)
 
         result["dti_bucket"] = self._dti_bucket(dti)
         result["credit_score_bucket"] = self._credit_score_bucket(credit)

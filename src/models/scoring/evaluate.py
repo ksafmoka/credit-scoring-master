@@ -79,15 +79,19 @@ def leakage_check(engine: Engine, checks: list[str]) -> LeakageResult:
             SELECT COUNT(*) AS overlap_count
             FROM (
                 SELECT application_id FROM raw.applications
-                WHERE application_date <= '2022-12-31'
+                WHERE application_date <= :train_end
                 INTERSECT
                 SELECT application_id FROM raw.applications
-                WHERE application_date > '2023-06-30'
+                WHERE application_date > :val_end
             ) t
             """
         )
+        from src.config import TrainingConfig
         with engine.connect() as conn:
-            result = pd.read_sql(overlap_query, conn)
+            result = pd.read_sql(overlap_query, conn, params={
+                "train_end": TrainingConfig.TRAIN_END_DATE,
+                "val_end": TrainingConfig.VAL_END_DATE,
+            })
         overlap = int(result["overlap_count"].iloc[0])
         if overlap > 0:
             issues["train_test_overlap"] = f"Found {overlap} overlapping IDs!"

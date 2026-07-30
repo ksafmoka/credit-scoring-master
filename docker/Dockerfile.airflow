@@ -15,7 +15,6 @@ USER airflow
 ENV PIP_DEFAULT_TIMEOUT=300 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_RETRIES=10 \
-    PIP_ROOT_USER_ACTION=ignore \
     GIT_PYTHON_REFRESH=quiet
 
 # Local Airflow 2.8.1 / Python 3.11 constraints (vendored — no GitHub download at build)

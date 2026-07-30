@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 280" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="960" height="280" fill="#0d1117" rx="8"/>
+
+  <!-- Title -->
+  <text x="480" y="28" text-anchor="middle" fill="#e6edf3" font-size="16" font-weight="600">ML Pipeline — Apache Airflow DAGs</text>
+
+  <!-- Step 1 -->
+  <rect x="20" y="50" width="155" height="95" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <rect x="20" y="50" width="155" height="26" rx="8" fill="#1f6feb"/>
+  <text x="97" y="67" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">1. Data Ingestion</text>
+  <text x="30" y="93" fill="#8b949e" font-size="10">CSV → PostgreSQL</text>
+  <text x="30" y="107" fill="#8b949e" font-size="10">2.2M raw applications</text>
+  <text x="30" y="121" fill="#8b949e" font-size="10">3.6M payment records</text>
+  <text x="30" y="135" fill="#8b949e" font-size="10">600k bureau records</text>
+
+  <!-- Arrow 1→2 -->
+  <line x1="175" y1="97" x2="200" y2="97" stroke="#30363d" stroke-width="2"/>
+  <polygon points="200,93 208,97 200,101" fill="#30363d"/>
+
+  <!-- Step 2 -->
+  <rect x="208" y="50" width="155" height="95" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <rect x="208" y="50" width="155" height="26" rx="8" fill="#238636"/>
+  <text x="285" y="67" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">2. Feature Eng.</text>
+  <text x="218" y="93" fill="#8b949e" font-size="10">fe_ids: 600k consistent</text>
+  <text x="218" y="107" fill="#8b949e" font-size="10">300k with payment history</text>
+  <text x="218" y="121" fill="#8b949e" font-size="10">300k cold-start (no hist.)</text>
+  <text x="218" y="135" fill="#8b949e" font-size="10">27 features per client</text>
+
+  <!-- Arrow 2→3 -->
+  <line x1="363" y1="97" x2="388" y2="97" stroke="#30363d" stroke-width="2"/>
+  <polygon points="388,93 396,97 388,101" fill="#30363d"/>
+
+  <!-- Step 3 -->
+  <rect x="396" y="50" width="170" height="95" rx="8" fill="#161b22" stroke="#8957e5" stroke-width="1.5"/>
+  <rect x="396" y="50" width="170" height="26" rx="8" fill="#8957e5"/>
+  <text x="481" y="67" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">3. Model Training</text>
+  <text x="406" y="93" fill="#8b949e" font-size="10">Optuna: 40 trials/segment</text>
+  <text x="406" y="107" fill="#8b949e" font-size="10">Best-of-3: CatBoost/LGBM/XGB</text>
+  <rect x="406" y="113" width="70" height="18" rx="4" fill="#1f6feb" opacity="0.8"/>
+  <text x="441" y="126" text-anchor="middle" fill="#fff" font-size="9">Model A: 27f</text>
+  <rect x="482" y="113" width="70" height="18" rx="4" fill="#f78166" opacity="0.8"/>
+  <text x="517" y="126" text-anchor="middle" fill="#fff" font-size="9">Model B: 20f</text>
+
+  <!-- Arrow 3→4 -->
+  <line x1="566" y1="97" x2="591" y2="97" stroke="#30363d" stroke-width="2"/>
+  <polygon points="591,93 599,97 591,101" fill="#30363d"/>
+
+  <!-- Step 4 -->
+  <rect x="599" y="50" width="155" height="95" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <rect x="599" y="50" width="155" height="26" rx="8" fill="#d29922"/>
+  <text x="676" y="67" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">4. Batch Prediction</text>
+  <text x="609" y="93" fill="#8b949e" font-size="10">Split by payment history</text>
+  <text x="609" y="107" fill="#8b949e" font-size="10">Score each segment</text>
+  <text x="609" y="121" fill="#8b949e" font-size="10">600k predictions</text>
+  <text x="609" y="135" fill="#8b949e" font-size="10">Risk buckets assigned</text>
+
+  <!-- Arrow 4→5 -->
+  <line x1="754" y1="97" x2="779" y2="97" stroke="#30363d" stroke-width="2"/>
+  <polygon points="779,93 787,97 779,101" fill="#30363d"/>
+
+  <!-- Step 5 -->
+  <rect x="787" y="50" width="155" height="95" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <rect x="787" y="50" width="155" height="26" rx="8" fill="#da3633"/>
+  <text x="864" y="67" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">5. Monitoring</text>
+  <text x="797" y="93" fill="#8b949e" font-size="10">PSI / KS drift detection</text>
+  <text x="797" y="107" fill="#8b949e" font-size="10">Prediction distribution</text>
+  <text x="797" y="121" fill="#8b949e" font-size="10">Telegram alerts on drift</text>
+  <text x="797" y="135" fill="#8b949e" font-size="10">Grafana dashboards</text>
+
+  <!-- Online API box -->
+  <rect x="310" y="175" width="340" height="75" rx="8" fill="#161b22" stroke="#8957e5" stroke-width="2"/>
+  <text x="480" y="198" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">Online API — FastAPI + Dual-Model Routing</text>
+  <text x="480" y="216" text-anchor="middle" fill="#8b949e" font-size="10">History available → Model A (27 features)</text>
+  <text x="480" y="230" text-anchor="middle" fill="#8b949e" font-size="10">No history → Model B (20 features)</text>
+  <text x="480" y="244" text-anchor="middle" fill="#58a6ff" font-size="10">SHAP top-3 reason codes | Risk bucket | PD score</text>
+
+  <!-- Arrow from training to API -->
+  <line x1="481" y1="145" x2="481" y2="175" stroke="#8957e5" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <polygon points="477,175 481,183 485,175" fill="#8957e5"/>
+  <text x="495" y="163" fill="#8957e5" font-size="9">MLflow registry</text>
+</svg>

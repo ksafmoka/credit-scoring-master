@@ -17,7 +17,7 @@ from sklearn.model_selection import TimeSeriesSplit
 from src.config import FeatureConfig, TrainingConfig
 from src.data.queries import get_feature_dataset
 from src.models.scoring.evaluate import compute_metrics
-from src.models.scoring.train import get_feature_matrix, get_model
+from src.models.scoring.train import _auto_date_cuts, get_feature_matrix, get_model
 
 
 class StackingEnsemble:
@@ -39,11 +39,21 @@ class StackingEnsemble:
         self.feature_medians: dict | None = None
 
     def fit(self, engine: Engine) -> tuple["StackingEnsemble", dict]:
-        train, val, _ = get_feature_dataset(
-            engine,
-            TrainingConfig.TRAIN_END_DATE,
-            TrainingConfig.VAL_END_DATE,
-        )
+        train_end = TrainingConfig.TRAIN_END_DATE
+        val_end = TrainingConfig.VAL_END_DATE
+        train, val, _ = get_feature_dataset(engine, train_end, val_end)
+
+        # Same auto-date-split fallback as train_model / load_training_frames
+        if TrainingConfig.AUTO_DATE_SPLIT and (train.empty or val.empty):
+            cuts = _auto_date_cuts(engine)
+            if cuts:
+                train_end, val_end = cuts
+                logger.warning(
+                    f"Ensemble: empty split with configured dates — "
+                    f"auto using train_end={train_end}, val_end={val_end}"
+                )
+                train, val, _ = get_feature_dataset(engine, train_end, val_end)
+
         if train.empty or val.empty:
             raise ValueError("Insufficient data for ensemble training")
 

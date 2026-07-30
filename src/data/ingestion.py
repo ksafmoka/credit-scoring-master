@@ -88,6 +88,7 @@ RAW_APPLICATION_COLUMNS = [
     "num_open_accounts",
     "num_delinquencies",
     "total_credit_limit",
+    "num_inquiries_6m",
     "is_default",
     "data_source",
 ]
@@ -313,6 +314,13 @@ def _preprocess_raw_chunk(
             "num_delinquencies",
         )
         .fillna(0)
+        .astype(int)
+    )
+
+    out["num_inquiries_6m"] = (
+        pd.to_numeric(df.get("num_inquiries_6m"), errors="coerce")
+        .fillna(0)
+        .clip(0, 50)
         .astype(int)
     )
 
