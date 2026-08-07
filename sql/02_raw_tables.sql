@@ -5,25 +5,29 @@
 SET ROLE ml_user;
 
 CREATE TABLE IF NOT EXISTS raw.applications (
-    application_id      BIGSERIAL PRIMARY KEY,
-    client_id           BIGINT NOT NULL,
-    application_date    DATE NOT NULL,
-    loan_amount         DOUBLE PRECISION,
-    loan_term           INT,
-    interest_rate       DOUBLE PRECISION,
-    income              DOUBLE PRECISION,
-    employment_years    DOUBLE PRECISION,
-    home_ownership      VARCHAR(20),
-    purpose             VARCHAR(50),
-    dti_ratio           DOUBLE PRECISION,
-    credit_score        DOUBLE PRECISION,
-    num_open_accounts   INT,
-    num_delinquencies   INT,
-    total_credit_limit  DOUBLE PRECISION,
-    num_inquiries_6m    INT DEFAULT 0,
-    is_default          BOOLEAN,
-    loaded_at           TIMESTAMP DEFAULT NOW(),
-    data_source         VARCHAR(50) DEFAULT 'lending_club'
+    application_id          BIGSERIAL PRIMARY KEY,
+    client_id               BIGINT NOT NULL,
+    application_date        DATE NOT NULL,
+    loan_amount             DOUBLE PRECISION,
+    loan_term               INT,
+    interest_rate           DOUBLE PRECISION,
+    income                  DOUBLE PRECISION,
+    employment_years        DOUBLE PRECISION,
+    home_ownership          VARCHAR(20),
+    purpose                 VARCHAR(50),
+    dti_ratio               DOUBLE PRECISION,
+    credit_score            DOUBLE PRECISION,
+    num_open_accounts       INT,
+    num_delinquencies       INT,
+    revolving_balance       DOUBLE PRECISION,
+    revolving_utilization   DOUBLE PRECISION,
+    total_accounts          INT,
+    pub_rec_bankruptcies    INT DEFAULT 0,
+    total_credit_limit      DOUBLE PRECISION,
+    num_inquiries_6m        INT DEFAULT 0,
+    is_default              BOOLEAN,
+    loaded_at               TIMESTAMP DEFAULT NOW(),
+    data_source             VARCHAR(50) DEFAULT 'lending_club'
 );
 
 CREATE INDEX IF NOT EXISTS idx_app_client ON raw.applications (client_id);

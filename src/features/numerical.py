@@ -48,6 +48,22 @@ class NumericalFeatureComputer:
         num_inquiries = pd.to_numeric(df.get("num_inquiries_6m"), errors="coerce").fillna(0)
         result["num_inquiries_6m"] = num_inquiries.clip(0, 50)
 
+        # NEW: Revolving utilization (from LC revol_util)
+        revolving_util = pd.to_numeric(df.get("revolving_utilization"), errors="coerce")
+        result["revolving_utilization"] = revolving_util.clip(0, 100).fillna(0)
+
+        # NEW: Total accounts (log transform)
+        total_acc = pd.to_numeric(df.get("total_accounts"), errors="coerce")
+        result["total_accounts_log"] = self._log_transform(total_acc.fillna(0))
+
+        # NEW: Revolving balance (log transform)
+        revol_bal = pd.to_numeric(df.get("revolving_balance"), errors="coerce")
+        result["revolving_balance_log"] = self._log_transform(revol_bal.fillna(0))
+
+        # NEW: Has bankruptcy (binary flag)
+        bankruptcies = pd.to_numeric(df.get("pub_rec_bankruptcies"), errors="coerce").fillna(0)
+        result["has_bankruptcy"] = (bankruptcies > 0).astype(int)
+
         loan_amount = pd.to_numeric(df["loan_amount"], errors="coerce")
         income = pd.to_numeric(df["income"], errors="coerce")
         # Cross-features

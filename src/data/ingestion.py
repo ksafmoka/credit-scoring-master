@@ -39,10 +39,12 @@ COLUMN_MAP: dict[str, str] = {
     "num_open_accounts": "num_open_accounts",
     "delinq_2yrs": "num_delinquencies",
     "num_delinquencies": "num_delinquencies",
-    "revol_bal": "total_credit_limit",
+    "revol_bal": "revolving_balance",  # NEW: keep separate from total_credit_limit
+    "revol_util": "revolving_utilization",  # NEW
     "total_rev_hi_lim": "total_credit_limit",
     "total_bc_limit": "total_credit_limit",
-    "total_acc": "total_accounts",
+    "total_acc": "total_accounts",  # NEW
+    "pub_rec_bankruptcies": "pub_rec_bankruptcies",  # NEW
     "total_credit_limit": "total_credit_limit",
     "issue_d": "application_date",
     "application_date": "application_date",
@@ -87,6 +89,10 @@ RAW_APPLICATION_COLUMNS = [
     "credit_score",
     "num_open_accounts",
     "num_delinquencies",
+    "revolving_balance",  # NEW
+    "revolving_utilization",  # NEW
+    "total_accounts",  # NEW
+    "pub_rec_bankruptcies",  # NEW
     "total_credit_limit",
     "num_inquiries_6m",
     "is_default",
@@ -323,6 +329,34 @@ def _preprocess_raw_chunk(
         .clip(0, 50)
         .astype(int)
     )
+
+    # NEW: Extract revolving_balance from revol_bal
+    if "revolving_balance" in df.columns:
+        out["revolving_balance"] = _to_numeric_series(df["revolving_balance"], n)
+    else:
+        out["revolving_balance"] = np.nan
+    out["revolving_balance"] = out["revolving_balance"].clip(0, 1e9)
+
+    # NEW: Extract revolving_utilization from revol_util
+    if "revolving_utilization" in df.columns:
+        out["revolving_utilization"] = _to_numeric_series(df["revolving_utilization"], n)
+    else:
+        out["revolving_utilization"] = np.nan
+    out["revolving_utilization"] = out["revolving_utilization"].clip(0, 100)  # percentage
+
+    # NEW: Extract total_accounts from total_acc
+    if "total_accounts" in df.columns:
+        out["total_accounts"] = _to_numeric_series(df["total_accounts"], n)
+    else:
+        out["total_accounts"] = np.nan
+    out["total_accounts"] = out["total_accounts"].fillna(0).clip(0, 1000).astype(int)
+
+    # NEW: Extract pub_rec_bankruptcies
+    if "pub_rec_bankruptcies" in df.columns:
+        out["pub_rec_bankruptcies"] = _to_numeric_series(df["pub_rec_bankruptcies"], n)
+    else:
+        out["pub_rec_bankruptcies"] = 0
+    out["pub_rec_bankruptcies"] = out["pub_rec_bankruptcies"].fillna(0).clip(0, 100).astype(int)
 
     if "total_credit_limit" in df.columns:
         out["total_credit_limit"] = _to_numeric_series(df["total_credit_limit"], n)

@@ -158,6 +158,10 @@ class FeatureConfig:
         "interest_rate",
         "loan_term",
         "num_inquiries_6m",
+        "revolving_utilization",  # NEW: revol_util from LC
+        "total_accounts_log",     # NEW: total_acc from LC
+        "revolving_balance_log",  # NEW: revol_bal from LC
+        "has_bankruptcy",         # NEW: pub_rec_bankruptcies from LC
         "loan_amount_x_dti",
         "income_x_credit_score",
         "dti_x_credit_score",
