@@ -43,8 +43,8 @@ def test_train_test_no_temporal_overlap():
             "target": np.random.randint(0, 2, len(dates)),
         }
     )
-    train_end = "2022-12-31"
-    val_end = "2023-06-30"
+    train_end = "2017-06-30"
+    val_end = "2017-12-31"
     train = df[df["application_date"] <= train_end]
     val = df[
         (df["application_date"] > train_end)

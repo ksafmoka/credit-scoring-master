@@ -1,0 +1,162 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "🤖 Model Performance",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "With-History Model",
+      "description": "Clients with payment history",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT COUNT(*)::bigint AS value FROM predictions.scoring_predictions WHERE model_version LIKE '%with_history%';", "format": "table" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": null }] }, "color": { "mode": "thresholds" } } }
+    },
+    {
+      "type": "stat",
+      "title": "Cold-Start Model",
+      "description": "Clients without payment history",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT COUNT(*)::bigint AS value FROM predictions.scoring_predictions WHERE model_version LIKE '%cold_start%';", "format": "table" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "orange", "value": null }] }, "color": { "mode": "thresholds" } } }
+    },
+    {
+      "type": "stat",
+      "title": "Avg PD (With History)",
+      "description": "Average predicted default probability",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT ROUND(AVG(pd_calibrated)::numeric, 4) AS value FROM predictions.scoring_predictions WHERE model_version LIKE '%with_history%';", "format": "table" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 2 } }
+    },
+    {
+      "type": "stat",
+      "title": "Avg PD (Cold Start)",
+      "description": "Average predicted default probability",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT ROUND(AVG(pd_calibrated)::numeric, 4) AS value FROM predictions.scoring_predictions WHERE model_version LIKE '%cold_start%';", "format": "table" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 2 } }
+    },
+    {
+      "type": "row",
+      "title": "📊 Risk Distribution",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 }
+    },
+    {
+      "type": "piechart",
+      "title": "Risk Distribution — All Clients",
+      "description": "Percentage of clients in each risk bucket",
+      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{
+        "rawSql": "SELECT risk_bucket AS metric, ROUND(COUNT(*)::numeric / (SELECT COUNT(*) FROM predictions.scoring_predictions) * 100, 1) AS value FROM predictions.scoring_predictions GROUP BY 1 ORDER BY 1;",
+        "format": "table"
+      }],
+      "options": {
+        "pieType": "donut",
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value"] },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "fixed" },
+          "mappings": [
+            { "type": "value", "options": { "LOW": { "color": "green" }, "MEDIUM": { "color": "yellow" }, "HIGH": { "color": "orange" }, "VERY_HIGH": { "color": "red" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Risk Distribution — With History",
+      "description": "Clients with payment history",
+      "gridPos": { "h": 9, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{
+        "rawSql": "SELECT risk_bucket AS metric, ROUND(COUNT(*)::numeric / (SELECT COUNT(*) FROM predictions.scoring_predictions WHERE model_version LIKE '%with_history%') * 100, 1) AS value FROM predictions.scoring_predictions WHERE model_version LIKE '%with_history%' GROUP BY 1 ORDER BY 1;",
+        "format": "table"
+      }],
+      "options": {
+        "pieType": "donut",
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "fixed" },
+          "mappings": [
+            { "type": "value", "options": { "LOW": { "color": "green" }, "MEDIUM": { "color": "yellow" }, "HIGH": { "color": "orange" }, "VERY_HIGH": { "color": "red" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "piechart",
+      "title": "Risk Distribution — Cold Start",
+      "description": "Clients without payment history",
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{
+        "rawSql": "SELECT risk_bucket AS metric, ROUND(COUNT(*)::numeric / (SELECT COUNT(*) FROM predictions.scoring_predictions WHERE model_version LIKE '%cold_start%') * 100, 1) AS value FROM predictions.scoring_predictions WHERE model_version LIKE '%cold_start%' GROUP BY 1 ORDER BY 1;",
+        "format": "table"
+      }],
+      "options": {
+        "pieType": "donut",
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": { "mode": "fixed" },
+          "mappings": [
+            { "type": "value", "options": { "LOW": { "color": "green" }, "MEDIUM": { "color": "yellow" }, "HIGH": { "color": "orange" }, "VERY_HIGH": { "color": "red" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "📈 PD Score Analysis",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 }
+    },
+    {
+      "type": "histogram",
+      "title": "PD Score Distribution — With History",
+      "description": "Distribution of predicted default probabilities",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT pd_calibrated::double precision AS pd_score FROM predictions.scoring_predictions WHERE model_version LIKE '%with_history%';", "format": "table" }],
+      "options": { "bucketSize": 0.05 }
+    },
+    {
+      "type": "histogram",
+      "title": "PD Score Distribution — Cold Start",
+      "description": "Distribution of predicted default probabilities",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT pd_calibrated::double precision AS pd_score FROM predictions.scoring_predictions WHERE model_version LIKE '%cold_start%';", "format": "table" }],
+      "options": { "bucketSize": 0.05 }
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["credit-scoring", "models"],
+  "templating": { "list": [] },
+  "time": { "from": "now-5y", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "02 — Model Performance",
+  "uid": "cs-models",
+  "version": 1
+}

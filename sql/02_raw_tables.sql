@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS raw.applications (
     num_open_accounts   INT,
     num_delinquencies   INT,
     total_credit_limit  DOUBLE PRECISION,
+    num_inquiries_6m    INT DEFAULT 0,
     is_default          BOOLEAN,
     loaded_at           TIMESTAMP DEFAULT NOW(),
     data_source         VARCHAR(50) DEFAULT 'lending_club'

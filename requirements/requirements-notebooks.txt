@@ -1,0 +1,27 @@
+# Requirements for running notebooks locally
+# Install: pip install -r requirements/requirements-notebooks.txt
+
+# Database
+psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.25
+
+# Data processing
+pandas>=2.1.4
+numpy>=1.26.4
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# ML & Analysis
+scikit-learn>=1.4.0
+lightgbm>=4.3.0
+catboost>=1.2.3
+xgboost>=2.0.3
+
+# Explainability
+shap>=0.44.1
+
+# Utilities
+loguru>=0.7.2
+pyyaml>=6.0.1

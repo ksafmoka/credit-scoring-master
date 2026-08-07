@@ -18,8 +18,12 @@ CREATE TABLE IF NOT EXISTS features.application_features (
     num_open_accounts           DOUBLE PRECISION,
     num_delinquencies           DOUBLE PRECISION,
     interest_rate               DOUBLE PRECISION,
+    loan_term                   DOUBLE PRECISION,
+    num_inquiries_6m            DOUBLE PRECISION,
     loan_amount_x_dti           DOUBLE PRECISION,
     income_x_credit_score       DOUBLE PRECISION,
+    dti_x_credit_score          DOUBLE PRECISION,
+    loan_amount_x_interest_rate DOUBLE PRECISION,
 
     dti_bucket                  VARCHAR(20),
     credit_score_bucket         VARCHAR(20),

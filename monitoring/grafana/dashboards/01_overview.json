@@ -1,0 +1,78 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "📊 Key Metrics",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Total Applications",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT COUNT(*)::bigint AS value FROM raw.applications;", "format": "table" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": null }] }, "color": { "mode": "thresholds" } } }
+    },
+    {
+      "type": "stat",
+      "title": "Payment Records",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT COUNT(*)::bigint AS value FROM raw.payment_history;", "format": "table" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": null }] }, "color": { "mode": "thresholds" } } }
+    },
+    {
+      "type": "stat",
+      "title": "Default Rate",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT ROUND(AVG(CASE WHEN is_default THEN 1.0 ELSE 0.0 END)::numeric, 4) AS value FROM raw.applications;", "format": "table" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 2 } }
+    },
+    {
+      "type": "stat",
+      "title": "Active Predictions",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT COUNT(*)::bigint AS value FROM predictions.scoring_predictions;", "format": "table" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "purple", "value": null }] }, "color": { "mode": "thresholds" } } }
+    },
+    {
+      "type": "row",
+      "title": "📈 Trends",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Applications Over Time",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT date_trunc('month', application_date)::timestamptz AS time, COUNT(*)::double precision AS applications FROM raw.applications GROUP BY 1 ORDER BY 1;", "format": "time_series" }],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 30 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Default Rate Trend",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT date_trunc('month', application_date)::timestamptz AS time, AVG(CASE WHEN is_default THEN 1.0 ELSE 0.0 END)::double precision AS default_rate FROM raw.applications GROUP BY 1 ORDER BY 1;", "format": "time_series" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 0.5, "color": { "fixedColor": "red", "mode": "fixed" } } }
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["credit-scoring", "overview"],
+  "templating": { "list": [] },
+  "time": { "from": "now-5y", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "01 — Data Overview",
+  "uid": "cs-overview",
+  "version": 1
+}

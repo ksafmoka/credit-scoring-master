@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="800" height="380" fill="#0d1117" rx="8"/>
+
+  <!-- Title -->
+  <text x="400" y="28" text-anchor="middle" fill="#e6edf3" font-size="16" font-weight="600">Project Statistics</text>
+
+  <!-- Section: Data Layer -->
+  <text x="30" y="58" fill="#8b949e" font-size="11" font-weight="600" letter-spacing="1">DATA LAYER</text>
+
+  <rect x="20" y="68" width="175" height="72" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="107" y="96" text-anchor="middle" fill="#58a6ff" font-size="24" font-weight="700">2.2M</text>
+  <text x="107" y="114" text-anchor="middle" fill="#8b949e" font-size="10">Raw applications</text>
+  <text x="107" y="130" text-anchor="middle" fill="#484f58" font-size="9">Lending Club 2007-2018</text>
+
+  <rect x="210" y="68" width="175" height="72" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="297" y="96" text-anchor="middle" fill="#3fb950" font-size="24" font-weight="700">3.6M</text>
+  <text x="297" y="114" text-anchor="middle" fill="#8b949e" font-size="10">Payment records</text>
+  <text x="297" y="130" text-anchor="middle" fill="#484f58" font-size="9">300k apps x 12 payments</text>
+
+  <rect x="400" y="68" width="175" height="72" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="487" y="96" text-anchor="middle" fill="#d2a8ff" font-size="24" font-weight="700">600k</text>
+  <text x="487" y="114" text-anchor="middle" fill="#8b949e" font-size="10">Features computed</text>
+  <text x="487" y="130" text-anchor="middle" fill="#484f58" font-size="9">50% history / 50% cold</text>
+
+  <rect x="590" y="68" width="190" height="72" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="685" y="96" text-anchor="middle" fill="#f78166" font-size="24" font-weight="700">27 / 20</text>
+  <text x="685" y="114" text-anchor="middle" fill="#8b949e" font-size="10">Features per model</text>
+  <text x="685" y="130" text-anchor="middle" fill="#484f58" font-size="9">A: 27 | B: 20 (no agg)</text>
+
+  <!-- Section: Models -->
+  <text x="30" y="168" fill="#8b949e" font-size="11" font-weight="600" letter-spacing="1">MODELS</text>
+
+  <rect x="20" y="178" width="245" height="85" rx="8" fill="#161b22" stroke="#1f6feb" stroke-width="1.5"/>
+  <text x="142" y="200" text-anchor="middle" fill="#58a6ff" font-size="13" font-weight="600">Model A — With History</text>
+  <line x1="30" y1="208" x2="255" y2="208" stroke="#21262d"/>
+  <text x="35" y="225" fill="#8b949e" font-size="10">CatBoost / LightGBM / XGBoost</text>
+  <text x="35" y="241" fill="#8b949e" font-size="10">27 features | 300k samples</text>
+  <text x="35" y="257" fill="#3fb950" font-size="10" font-weight="600">AUC: 0.6971 | KS: 0.28</text>
+
+  <rect x="280" y="178" width="245" height="85" rx="8" fill="#161b22" stroke="#f78166" stroke-width="1.5"/>
+  <text x="402" y="200" text-anchor="middle" fill="#f78166" font-size="13" font-weight="600">Model B — Cold Start</text>
+  <line x1="290" y1="208" x2="515" y2="208" stroke="#21262d"/>
+  <text x="295" y="225" fill="#8b949e" font-size="10">CatBoost / LightGBM / XGBoost</text>
+  <text x="295" y="241" fill="#8b949e" font-size="10">20 features | 300k samples</text>
+  <text x="295" y="257" fill="#3fb950" font-size="10" font-weight="600">AUC: 0.7126 | KS: 0.31</text>
+
+  <rect x="540" y="178" width="240" height="85" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="660" y="200" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="600">Validation Metrics</text>
+  <line x1="550" y1="208" x2="770" y2="208" stroke="#21262d"/>
+  <text x="555" y="225" fill="#8b949e" font-size="10">ROC-AUC:  0.697 — 0.713</text>
+  <text x="555" y="241" fill="#8b949e" font-size="10">KS:       0.28 — 0.31</text>
+  <text x="555" y="257" fill="#8b949e" font-size="10">Gini:     0.39 — 0.43</text>
+
+  <!-- Section: Infrastructure -->
+  <text x="30" y="292" fill="#8b949e" font-size="11" font-weight="600" letter-spacing="1">INFRASTRUCTURE</text>
+
+  <rect x="20" y="302" width="110" height="55" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="75" y="326" text-anchor="middle" fill="#58a6ff" font-size="20" font-weight="700">5</text>
+  <text x="75" y="345" text-anchor="middle" fill="#8b949e" font-size="9">Airflow DAGs</text>
+
+  <rect x="145" y="302" width="110" height="55" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="200" y="326" text-anchor="middle" fill="#58a6ff" font-size="20" font-weight="700">6</text>
+  <text x="200" y="345" text-anchor="middle" fill="#8b949e" font-size="9">Docker services</text>
+
+  <rect x="270" y="302" width="110" height="55" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="325" y="326" text-anchor="middle" fill="#58a6ff" font-size="20" font-weight="700">40</text>
+  <text x="325" y="345" text-anchor="middle" fill="#8b949e" font-size="9">Optuna trials</text>
+
+  <rect x="395" y="302" width="110" height="55" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="450" y="326" text-anchor="middle" fill="#58a6ff" font-size="20" font-weight="700">2</text>
+  <text x="450" y="345" text-anchor="middle" fill="#8b949e" font-size="9">Notebooks</text>
+
+  <rect x="520" y="302" width="130" height="55" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="585" y="326" text-anchor="middle" fill="#58a6ff" font-size="20" font-weight="700">Grafana</text>
+  <text x="585" y="345" text-anchor="middle" fill="#8b949e" font-size="9">Monitoring + alerts</text>
+
+  <rect x="665" y="302" width="115" height="55" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="722" y="326" text-anchor="middle" fill="#58a6ff" font-size="20" font-weight="700">Telegram</text>
+  <text x="722" y="345" text-anchor="middle" fill="#8b949e" font-size="9">Drift notifications</text>
+</svg>

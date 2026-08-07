@@ -37,10 +37,20 @@ def compute_shap_values(
 
     logger.info("Computing SHAP values...")
     base = _unwrap_model(model)
-    explainer = shap.TreeExplainer(base)
-    shap_values = explainer.shap_values(X)
-    if isinstance(shap_values, list):
-        shap_values = shap_values[1]
+    
+    try:
+        explainer = shap.TreeExplainer(base)
+        shap_values = explainer.shap_values(X)
+        if isinstance(shap_values, list):
+            shap_values = shap_values[1]  # positive class
+    except Exception as tree_err:
+        logger.warning(f"TreeExplainer failed ({tree_err}), falling back to KernelExplainer")
+        # KernelExplainer works with any model
+        predict_fn = model.predict_proba if hasattr(model, "predict_proba") else model.predict
+        background = shap.kmeans(X, min(50, len(X)))
+        explainer = shap.KernelExplainer(predict_fn, background)
+        shap_values = explainer.shap_values(X)
+    
     return shap_values, explainer
 
 

@@ -51,14 +51,14 @@ Check date range:
 python -c "import pandas as pd; d=pd.read_csv('data/lending_club.csv', usecols=['issue_d']); print(d['issue_d'].dropna().head()); print(d['issue_d'].value_counts().head())"
 ```
 
-Edit `src/config.py` → `TrainingConfig` if needed, e.g. for older LC dumps:
+Edit `src/config.py` → `TrainingConfig` or `.env` if needed, e.g. for different date ranges:
 
 ```python
-TRAIN_END_DATE = "2016-12-31"
-VAL_END_DATE = "2017-06-30"
+TRAIN_END_DATE = "2017-06-30"
+VAL_END_DATE = "2017-12-31"
 ```
 
-(Defaults `2022-12-31` / `2023-06-30` only fit modern samples.)
+(Defaults `2017-06-30` / `2017-12-31` match our EDA-selected stable window. Adjust if your LC dump covers different years — see `notebooks/01_EDA.ipynb` for statistical justification.)
 
 ## 4. Re-run pipeline
 

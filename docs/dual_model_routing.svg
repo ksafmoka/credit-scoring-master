@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="880" height="420" fill="#0d1117" rx="8"/>
+
+  <!-- Title -->
+  <text x="440" y="28" text-anchor="middle" fill="#e6edf3" font-size="16" font-weight="600">Dual-Model Scoring Architecture</text>
+  <text x="440" y="46" text-anchor="middle" fill="#8b949e" font-size="11">Real-time routing based on payment history availability</text>
+
+  <!-- API Request box -->
+  <rect x="25" y="75" width="180" height="110" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <rect x="25" y="75" width="180" height="24" rx="8" fill="#21262d"/>
+  <text x="115" y="91" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">POST /predict</text>
+  <text x="40" y="115" fill="#3fb950" font-size="10">&#10003; loan_amount, income</text>
+  <text x="40" y="131" fill="#3fb950" font-size="10">&#10003; credit_score, dti</text>
+  <text x="40" y="147" fill="#3fb950" font-size="10">&#10003; interest_rate, term</text>
+  <text x="40" y="163" fill="#d29922" font-size="10">? avg_days_overdue_90d</text>
+  <text x="40" y="179" fill="#d29922" font-size="10">? pct_late_payments_90d</text>
+
+  <!-- Router diamond -->
+  <polygon points="310,105 380,130 310,155 240,130" fill="#161b22" stroke="#8957e5" stroke-width="2"/>
+  <text x="310" y="128" text-anchor="middle" fill="#d2a8ff" font-size="11" font-weight="600">Router</text>
+  <text x="310" y="142" text-anchor="middle" fill="#8b949e" font-size="9">has_history?</text>
+
+  <!-- Arrow: Request → Router -->
+  <line x1="205" y1="130" x2="240" y2="130" stroke="#484f58" stroke-width="2"/>
+  <polygon points="240,126 248,130 240,134" fill="#484f58"/>
+
+  <!-- Model A -->
+  <rect x="460" y="70" width="230" height="105" rx="8" fill="#161b22" stroke="#1f6feb" stroke-width="1.5"/>
+  <rect x="460" y="70" width="230" height="24" rx="8" fill="#1f6feb"/>
+  <text x="575" y="86" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">Model A: With History</text>
+  <text x="475" y="112" fill="#8b949e" font-size="10">27 features (ALL)</text>
+  <text x="475" y="128" fill="#8b949e" font-size="10">+ aggregation features</text>
+  <text x="475" y="144" fill="#8b949e" font-size="10">+ bureau features</text>
+  <text x="475" y="163" fill="#58a6ff" font-size="11" font-weight="600">AUC: 0.6971</text>
+
+  <!-- Model B -->
+  <rect x="460" y="220" width="230" height="105" rx="8" fill="#161b22" stroke="#f78166" stroke-width="1.5"/>
+  <rect x="460" y="220" width="230" height="24" rx="8" fill="#da3633"/>
+  <text x="575" y="236" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">Model B: Cold Start</text>
+  <text x="475" y="262" fill="#8b949e" font-size="10">20 features (no aggregation)</text>
+  <text x="475" y="278" fill="#8b949e" font-size="10">+ bureau features only</text>
+  <text x="475" y="294" fill="#8b949e" font-size="10">Thin-file clients</text>
+  <text x="475" y="313" fill="#f78166" font-size="11" font-weight="600">AUC: 0.7126</text>
+
+  <!-- Arrows: Router → Models -->
+  <line x1="380" y1="120" x2="460" y2="120" stroke="#1f6feb" stroke-width="2"/>
+  <polygon points="460,116 468,120 460,124" fill="#1f6feb"/>
+  <text x="415" y="112" fill="#58a6ff" font-size="10" font-weight="600">YES</text>
+
+  <path d="M 380 140 Q 420 250 460 270" stroke="#f78166" stroke-width="2" fill="none"/>
+  <polygon points="460,266 468,270 460,274" fill="#f78166"/>
+  <text x="395" y="200" fill="#f78166" font-size="10" font-weight="600">NO</text>
+
+  <!-- Response box -->
+  <rect x="750" y="145" width="110" height="105" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <rect x="750" y="145" width="110" height="24" rx="8" fill="#21262d"/>
+  <text x="805" y="161" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">Response</text>
+  <text x="805" y="186" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="600">PD: 0.12</text>
+  <text x="805" y="203" text-anchor="middle" fill="#d29922" font-size="10">Risk: MEDIUM</text>
+  <text x="805" y="219" text-anchor="middle" fill="#8b949e" font-size="9">+ SHAP reasons</text>
+  <text x="805" y="235" text-anchor="middle" fill="#8b949e" font-size="9">+ model_version</text>
+
+  <!-- Arrows: Models → Response -->
+  <line x1="690" y1="120" x2="750" y2="175" stroke="#484f58" stroke-width="1.5"/>
+  <polygon points="748,171 756,175 748,179" fill="#484f58"/>
+  <line x1="690" y1="270" x2="750" y2="215" stroke="#484f58" stroke-width="1.5"/>
+  <polygon points="748,211 756,215 748,219" fill="#484f58"/>
+
+  <!-- Bottom explanation -->
+  <rect x="25" y="355" width="830" height="50" rx="8" fill="#161b22" stroke="#21262d" stroke-width="1"/>
+  <text x="440" y="376" text-anchor="middle" fill="#8b949e" font-size="11" font-weight="600">Why dual-model?</text>
+  <text x="60" y="394" fill="#58a6ff" font-size="10">Thick-file clients: rich payment history &#8594; 27 features &#8594; accurate PD estimate</text>
+  <text x="500" y="394" fill="#f78166" font-size="10">Thin-file clients: no history &#8594; separate model avoids NaN imputation penalty</text>
+</svg>

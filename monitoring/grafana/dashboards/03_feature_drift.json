@@ -1,0 +1,79 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "⚠️ Drift Alerts",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Total Drift Checks",
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT COUNT(*)::bigint AS value FROM monitoring.feature_drift;", "format": "table" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "blue", "value": null }] }, "color": { "mode": "thresholds" } } }
+    },
+    {
+      "type": "stat",
+      "title": "Features Drifted",
+      "description": "Number of features with PSI > 0.25",
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT COUNT(DISTINCT feature_name)::bigint AS value FROM monitoring.feature_drift WHERE is_drifted = true;", "format": "table" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 }] }, "color": { "mode": "thresholds" } } }
+    },
+    {
+      "type": "stat",
+      "title": "Max PSI (Latest)",
+      "description": "Maximum PSI value from latest check",
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 1 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT MAX(psi_value)::double precision AS value FROM monitoring.feature_drift WHERE checked_at = (SELECT MAX(checked_at) FROM monitoring.feature_drift);", "format": "table" }],
+      "fieldConfig": { "defaults": { "decimals": 4, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.10 }, { "color": "red", "value": 0.25 }] }, "color": { "mode": "thresholds" } } }
+    },
+    {
+      "type": "row",
+      "title": "📊 PSI Trends",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 }
+    },
+    {
+      "type": "timeseries",
+      "title": "PSI by Feature Over Time",
+      "description": "Population Stability Index trends (PSI > 0.25 = drift detected)",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 7 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT checked_at::timestamptz AS time, psi_value::double precision AS psi, feature_name FROM monitoring.feature_drift ORDER BY 1;", "format": "time_series" }],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "lineWidth": 2 } } }
+    },
+    {
+      "type": "row",
+      "title": "🔍 KS Statistic",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 }
+    },
+    {
+      "type": "timeseries",
+      "title": "KS Statistic by Feature",
+      "description": "Kolmogorov-Smirnov statistic (KS > 0.30 = significant difference)",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 18 },
+      "datasource": { "type": "postgres", "uid": "postgres-credit-scoring" },
+      "targets": [{ "rawSql": "SELECT checked_at::timestamptz AS time, ks_statistic::double precision AS ks, feature_name FROM monitoring.feature_drift ORDER BY 1;", "format": "time_series" }],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "lineWidth": 2 }, "min": 0, "max": 1 } }
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["credit-scoring", "drift"],
+  "templating": { "list": [] },
+  "time": { "from": "now-5y", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "03 — Feature Drift",
+  "uid": "cs-drift",
+  "version": 1
+}

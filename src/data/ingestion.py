@@ -88,6 +88,7 @@ RAW_APPLICATION_COLUMNS = [
     "num_open_accounts",
     "num_delinquencies",
     "total_credit_limit",
+    "num_inquiries_6m",
     "is_default",
     "data_source",
 ]
@@ -313,6 +314,13 @@ def _preprocess_raw_chunk(
             "num_delinquencies",
         )
         .fillna(0)
+        .astype(int)
+    )
+
+    out["num_inquiries_6m"] = (
+        pd.to_numeric(df.get("num_inquiries_6m"), errors="coerce")
+        .fillna(0)
+        .clip(0, 50)
         .astype(int)
     )
 
@@ -564,15 +572,23 @@ def generate_synthetic_payment_history(
             monthly = float(row.loan_amount) / max(n_pay, 1)
             monthly = float(np.clip(monthly, 0, 1e9))
             end_offset = int(rng.integers(1, 31))
+            
+            # Make payment behavior correlate with is_default
+            # Realistic correlation: defaulters have ~25% late payments vs ~15% for non-defaulters
+            # This is ~1.7x difference (realistic, not overfit)
+            late_rate = 0.25 if row.is_default else 0.15
+            
             # Pre-calc dates without heavy DateOffset in inner loop? keep simple but safe
             for month in range(n_pay):
                 payment_date = row.application_date - pd.DateOffset(
                     months=n_pay - month, days=end_offset
                 )
-                if rng.random() < 0.12:
-                    days_overdue = int(
-                        rng.choice([5, 15, 30, 60], p=[0.4, 0.3, 0.2, 0.1])
-                    )
+                if rng.random() < late_rate:
+                    # Defaulters have slightly more severe delinquencies
+                    if row.is_default:
+                        days_overdue = int(rng.choice([10, 20, 30, 60], p=[0.3, 0.3, 0.25, 0.15]))
+                    else:
+                        days_overdue = int(rng.choice([5, 10, 15, 30], p=[0.4, 0.3, 0.2, 0.1]))
                 else:
                     days_overdue = 0
                 paid_ratio = max(
