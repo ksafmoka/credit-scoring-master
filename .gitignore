@@ -32,3 +32,4 @@ htmlcov/
 catboost_info/
 mlflow_artifacts_vol/
 project_timeline.md
+FEATURE_SELECTION_STATUS.md
