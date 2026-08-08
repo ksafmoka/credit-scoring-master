@@ -145,27 +145,27 @@ class FeatureConfig:
     PAYMENT_WINDOWS: list[int] = [30, 90, 180]
 
     # Application-level engineered numerics + cross features
+    # Based on feature selection analysis - only keep features with real importance
     NUMERICAL_FEATURES: list[str] = [
-        "loan_to_income",
-        "credit_utilization",
-        "income_log",
-        "loan_amount_log",
-        "dti_ratio_clipped",
-        "employment_years",
-        "credit_score_norm",
-        "num_open_accounts",
-        "num_delinquencies",
-        "interest_rate",
-        "loan_term",
-        "num_inquiries_6m",
-        "revolving_utilization",  # NEW: revol_util from LC
-        "total_accounts_log",     # NEW: total_acc from LC
-        "revolving_balance_log",  # NEW: revol_bal from LC
-        "has_bankruptcy",         # NEW: pub_rec_bankruptcies from LC
+        "loan_to_income",           # Important: debt-to-income ratio
+        "credit_utilization",       # Important: credit utilization
+        "income_log",               # Important: income level
+        "loan_amount_log",          # Important: loan size
+        "dti_ratio_clipped",        # Important: debt-to-income
+        "employment_years",         # Moderate: employment stability
+        "credit_score_norm",        # Important: credit score (fico_range_high)
+        "num_open_accounts",        # Moderate: credit activity
+        "num_delinquencies",        # Important: payment history
+        "interest_rate",            # Important: risk-based pricing
+        "loan_term",                # Moderate: loan duration
+        "num_inquiries_6m",         # Important: recent credit inquiries
+        "revolving_utilization",    # Important: credit utilization ratio (NEW from LC)
+        "total_accounts_log",       # Important: credit history length (NEW from LC)
+        "revolving_balance_log",    # Important: revolving debt (NEW from LC)
+        "has_bankruptcy",           # Important: bankruptcy flag (NEW from LC)
+        # Cross-features (moderate importance)
         "loan_amount_x_dti",
         "income_x_credit_score",
-        "dti_x_credit_score",
-        "loan_amount_x_interest_rate",
     ]
 
     CATEGORICAL_FEATURES: list[str] = [
