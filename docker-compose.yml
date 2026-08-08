@@ -14,6 +14,8 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
     AIRFLOW__WEBSERVER__SECRET_KEY: credit_scoring_airflow_secret_key_change_me
     AIRFLOW__CORE__FERNET_KEY: "dGVzdF9mZXJuZXRfa2V5X2Zvcl9sb2NhbF9kZW1vX29ubHk="
+    # Increase heartbeat timeout for large data loading tasks (2 hours)
+    AIRFLOW__CORE__TASK_HEARTBEAT_TIMEOUT: 7200
     MLFLOW_TRACKING_URI: http://mlflow:5000
     # Same path in Airflow + MLflow containers (shared volume)
     MLFLOW_ARTIFACT_ROOT: /mlflow/artifacts
