@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS raw.applications (
     revolving_utilization   DOUBLE PRECISION,
     total_accounts          INT,
     pub_rec_bankruptcies    INT DEFAULT 0,
+    grade                   INT,
     total_credit_limit      DOUBLE PRECISION,
     num_inquiries_6m        INT DEFAULT 0,
     is_default              BOOLEAN,

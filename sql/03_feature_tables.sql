@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS features.application_features (
     total_accounts_log          DOUBLE PRECISION,
     revolving_balance_log       DOUBLE PRECISION,
     has_bankruptcy              DOUBLE PRECISION,
+    grade                       DOUBLE PRECISION,
     loan_amount_x_dti           DOUBLE PRECISION,
     income_x_credit_score       DOUBLE PRECISION,
     dti_x_credit_score          DOUBLE PRECISION,

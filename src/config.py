@@ -163,6 +163,7 @@ class FeatureConfig:
         "total_accounts_log",       # Important: credit history length (NEW from LC)
         "revolving_balance_log",    # Important: revolving debt (NEW from LC)
         "has_bankruptcy",           # Important: bankruptcy flag (NEW from LC)
+        "grade",                    # VERY IMPORTANT: LC risk rating A-G (NEW from LC)
         # Cross-features (moderate importance)
         "loan_amount_x_dti",
         "income_x_credit_score",

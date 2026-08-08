@@ -45,6 +45,8 @@ COLUMN_MAP: dict[str, str] = {
     "total_bc_limit": "total_credit_limit",
     "total_acc": "total_accounts",  # NEW
     "pub_rec_bankruptcies": "pub_rec_bankruptcies",  # NEW
+    "grade": "grade",  # NEW: LC risk rating (A-G)
+    "sub_grade": "sub_grade",  # NEW: LC detailed risk rating (A1-G5)
     "total_credit_limit": "total_credit_limit",
     "issue_d": "application_date",
     "application_date": "application_date",
@@ -93,6 +95,7 @@ RAW_APPLICATION_COLUMNS = [
     "revolving_utilization",  # NEW
     "total_accounts",  # NEW
     "pub_rec_bankruptcies",  # NEW
+    "grade",  # NEW: LC risk rating (A-G)
     "total_credit_limit",
     "num_inquiries_6m",
     "is_default",
@@ -357,6 +360,14 @@ def _preprocess_raw_chunk(
     else:
         out["pub_rec_bankruptcies"] = 0
     out["pub_rec_bankruptcies"] = out["pub_rec_bankruptcies"].fillna(0).clip(0, 100).astype(int)
+
+    # NEW: Extract grade (A-G) and map to numerical (A=1, B=2, ..., G=7)
+    if "grade" in df.columns:
+        grade_map = {"A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7}
+        out["grade"] = df["grade"].astype(str).str.upper().map(grade_map)
+    else:
+        out["grade"] = np.nan
+    out["grade"] = out["grade"].fillna(3).clip(1, 7).astype(int)  # Default to C (3)
 
     if "total_credit_limit" in df.columns:
         out["total_credit_limit"] = _to_numeric_series(df["total_credit_limit"], n)

@@ -64,6 +64,10 @@ class NumericalFeatureComputer:
         bankruptcies = pd.to_numeric(df.get("pub_rec_bankruptcies"), errors="coerce").fillna(0)
         result["has_bankruptcy"] = (bankruptcies > 0).astype(int)
 
+        # NEW: Grade (LC risk rating A-G, already mapped to 1-7 in ingestion)
+        grade = pd.to_numeric(df.get("grade"), errors="coerce").fillna(3)
+        result["grade"] = grade.clip(1, 7).astype(float)
+
         loan_amount = pd.to_numeric(df["loan_amount"], errors="coerce")
         income = pd.to_numeric(df["income"], errors="coerce")
         # Cross-features
